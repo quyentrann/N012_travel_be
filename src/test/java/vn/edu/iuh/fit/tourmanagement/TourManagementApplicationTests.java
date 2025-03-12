@@ -18,25 +18,25 @@ class TourManagementApplicationTests {
 
 	@Test
 	void contextLoads() {
-		Faker faker = new Faker();
-		if (userRepository.count() == 0) {
-			IntStream.range(0, 100)  // Seed 100 người dùng
-					.forEach(i -> {
-						User user = User.builder()
-								.code(faker.code().asin())
-								.userName(faker.name().username())
-								.password(faker.internet().password())
-								.email(faker.internet().emailAddress())
-								.phoneNumber(faker.phoneNumber().cellPhone())
-								.fullName(faker.name().fullName())
-								.address(faker.address().fullAddress())
-								.dateOfBirth(LocalDateTime.now())
-								.build();
-
-						userRepository.save(user);
-					});
-			System.out.println("Seeded 100 users.");
-		}
+//		Faker faker = new Faker();
+//		if (userRepository.count() == 0) {
+//			IntStream.range(0, 100)  // Seed 100 người dùng
+//					.forEach(i -> {
+//						User user = User.builder()
+//								.code(faker.code().asin())
+//								.userName(faker.name().username())
+//								.password(faker.internet().password())
+//								.email(faker.internet().emailAddress())
+//								.phoneNumber(faker.phoneNumber().cellPhone())
+//								.fullName(faker.name().fullName())
+//								.address(faker.address().fullAddress())
+//								.dateOfBirth(LocalDateTime.now())
+//								.build();
+//
+//						userRepository.save(user);
+//					});
+//			System.out.println("Seeded 100 users.");
+//		}
 
 	}
 
