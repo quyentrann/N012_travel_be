@@ -1,6 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.models;
 import jakarta.persistence.*;
 import lombok.*;
+import vn.edu.iuh.fit.tourmanagement.id.TourFavouriteId;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -27,8 +28,8 @@ public class TourFavourite {
     private Tour tour;
 }
 
-@Data
-class TourFavouriteId implements Serializable {
-    private Customer customer;
-    private Tour tour;
-}
+//@Data
+// class TourFavouriteId implements Serializable {
+//    private Customer customer;
+//    private Tour tour;
+//}

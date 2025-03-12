@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
 
-import java.time.LocalDate;
 @Entity
 @Table(name = "tour")
 @Getter
@@ -21,7 +20,7 @@ public class Tour {
 
     @ManyToOne
     @JoinColumn(name = "tour_category_id")
-    private Tourcategory tourcategory;
+    private TourCategory tourcategory;
 
     @Column(name = "name", length = 255)
     private String name;

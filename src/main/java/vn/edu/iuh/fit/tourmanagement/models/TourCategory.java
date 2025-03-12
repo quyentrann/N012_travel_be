@@ -2,8 +2,6 @@ package vn.edu.iuh.fit.tourmanagement.models;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
-
 @Entity
 @Table(name = "category")
 @Getter
@@ -12,7 +10,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @Builder
 @ToString
-public class Tourcategory {
+public class TourCategory {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "category_id")
