@@ -34,7 +34,7 @@ public class Discount {
     @Column(name = "end_date")
     private LocalDate endDate;
     @Column(name = "quantity")
-    private int quality;
+    private int quantity;
     @Column(name = "min_order_value")
     private double minOrderValue;
 }
