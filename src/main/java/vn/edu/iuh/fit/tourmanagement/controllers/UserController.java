@@ -5,9 +5,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.models.User;
+import vn.edu.iuh.fit.tourmanagement.services.AuthService;
 import vn.edu.iuh.fit.tourmanagement.services.UserService;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -15,6 +18,9 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+    @Autowired
+    private AuthService authService;
+
 
     // Lấy tất cả người dùng
     @GetMapping
@@ -68,4 +74,29 @@ public class UserController {
         }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+
+    //Đăng nhập nhưng chưa sử dụng security/ JWT
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> loginRequest){
+        System.out.println("Username: " + loginRequest.get("email"));
+        System.out.println("Password: " + loginRequest.get("password"));
+        try{
+            String email = loginRequest.get("email");
+            String password = loginRequest.get("password");
+            User user = authService.login(email, password);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("userId", String.valueOf(user.getId()));
+            response.put("role", user.getRole().name());
+            response.put("status", user.getStatus().name());
+
+            return ResponseEntity.ok(response);
+        }catch (RuntimeException e) {
+            return ResponseEntity.status(401).body(e.getMessage());
+        }
+    }
+
+
+    
 }

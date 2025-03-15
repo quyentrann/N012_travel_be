@@ -25,13 +25,15 @@ public class Discount {
     private String description;
     @Column(name = "discount_percent")
     private double discountPercent;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "discount_stype")
     private DiscountStype discountStype;
     @Column(name = "start_date")
     private LocalDate startDate;
     @Column(name = "end_date")
     private LocalDate endDate;
-    @Column(name = "quality")
+    @Column(name = "quantity")
     private int quality;
     @Column(name = "min_order_value")
     private double minOrderValue;

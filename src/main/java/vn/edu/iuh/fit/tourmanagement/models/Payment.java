@@ -28,8 +28,10 @@ public class Payment {
     private LocalDate paymentDate;
 
     @Column(name = "payment_status")
+    @Enumerated(EnumType.STRING)
     private PaymentStatus paymentStatus;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "payment_method")
     private PaymentMethod paymentMethod;
 

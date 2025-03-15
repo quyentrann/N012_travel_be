@@ -5,5 +5,5 @@ public enum BookingStatus {
     CANCELED,// đã hủy đặt tour
     COMPLETED,// đã hoàn thành tour
     PAID,// đã thanh toán nhưng chưa hoàn thành tour
-    IN_GROGRESS// người dùng đang thực hiện tour
+    IN_PROGRESS// người dùng đang thực hiện tour
 }
