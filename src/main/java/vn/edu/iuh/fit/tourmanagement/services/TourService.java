@@ -16,4 +16,7 @@ public class TourService {
         return tourRepository.findAll();
     }
 
+    public Tour getTourById(Long id) {
+        return tourRepository.findById(id).orElse(null);
+    }
 }
