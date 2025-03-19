@@ -25,7 +25,7 @@ public class Employee {
     @Column(name = "dob")
     private LocalDate DOB;
 
-    @Column(name = "phong_number")
+    @Column(name = "phone_number")
     private String phongNumber;
 
     @OneToOne
@@ -41,6 +41,6 @@ public class Employee {
     @Column(name = "cid")
     private String CID; // Chứng minh nhân dân/ CCCD
 
-    @Column(name = "position")
+    @Column(name = "position")// true là quản lý, false là nhân viên
     private boolean position;
 }

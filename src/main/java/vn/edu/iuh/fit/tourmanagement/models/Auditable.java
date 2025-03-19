@@ -28,5 +28,6 @@ public abstract class Auditable implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime lastModifiedDate;
 
-    private boolean deleted;
+    @Column(nullable = false)
+    private boolean deleted = false;
 }

@@ -38,6 +38,7 @@ public class Tour {
     private String description;
 
     @Column(name = "status")
+    @Enumerated(EnumType.STRING)
     private TourStatus status;
 
     @Column(name = "image_url")

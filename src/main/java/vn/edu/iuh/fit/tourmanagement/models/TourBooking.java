@@ -36,5 +36,11 @@ public class TourBooking {
     private LocalDate bookingDate;
 
     @Column(name = "status")
+    @Enumerated(EnumType.STRING)
     private BookingStatus status;
+
+    @ManyToOne
+    @JoinColumn(name = "discount_id")
+    private Discount discount;
+
 }
