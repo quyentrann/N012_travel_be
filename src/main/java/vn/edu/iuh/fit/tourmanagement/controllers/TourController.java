@@ -16,7 +16,6 @@ public class TourController {
     @Autowired
     private TourService tourService;
 
-    // Lấy tất cả tour
     @GetMapping
     public ResponseEntity<List<Tour>> getAllTours() {
         List<Tour> tours = tourService.getAllTours();
@@ -26,9 +25,8 @@ public class TourController {
         return new ResponseEntity<>(tours, HttpStatus.OK);
     }
 
-    // Lấy tour theo ID
     @GetMapping("/{id}")
-    public ResponseEntity<Tour> getTourById(@PathVariable("id") Long id) {
+    public ResponseEntity<Tour> getTourById( @PathVariable Long id) {
         Tour tour = tourService.getTourById(id);
         if (tour == null) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
@@ -36,7 +34,6 @@ public class TourController {
         return new ResponseEntity<>(tour, HttpStatus.OK);
     }
 
-    // Tạo tour mới
     @PostMapping
     public ResponseEntity<Tour> createTour(@RequestBody Tour tour) {
         try {
@@ -47,7 +44,6 @@ public class TourController {
         }
     }
 
-    // Cập nhật tour
     @PutMapping("/{id}")
     public ResponseEntity<Tour> updateTour(@PathVariable("id") Long id, @RequestBody Tour tour) {
         Tour existingTour = tourService.getTourById(id);
@@ -59,7 +55,6 @@ public class TourController {
         return new ResponseEntity<>(updatedTour, HttpStatus.OK);
     }
 
-    // Xóa tour (có thể là soft delete)
     @DeleteMapping("/{id}")
     public ResponseEntity<HttpStatus> deleteTour(@PathVariable("id") Long id) {
         boolean isDeleted = tourService.deleteTour(id);
