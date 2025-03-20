@@ -37,6 +37,7 @@ class TourManagementApplicationTests {
 //					});
 //			System.out.println("Seeded 100 users.");
 //		}
+		System.out.println(userRepository.findByEmail("quyenco31@gmail.com"));
 
 	}
 
