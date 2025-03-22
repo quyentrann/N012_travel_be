@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
+import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
 import java.util.List;

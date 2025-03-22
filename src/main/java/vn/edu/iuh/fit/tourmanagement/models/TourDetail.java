@@ -1,4 +1,5 @@
 package vn.edu.iuh.fit.tourmanagement.models;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -20,6 +21,7 @@ public class TourDetail {
 
     @ManyToOne
     @JoinColumn(name = "tour_id")
+    @JsonBackReference
     private Tour tour;
 
     @Column(name = "included_services")

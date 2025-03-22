@@ -1,8 +1,11 @@
 package vn.edu.iuh.fit.tourmanagement.models;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
+
+import java.util.List;
 
 @Entity
 @Table(name = "tour")
@@ -43,4 +46,13 @@ public class Tour {
 
     @Column(name = "image_url")
     private String imageURL;
+
+    @OneToMany(mappedBy = "tour", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
+    private List<TourDetail> tourDetails;
+
+    @OneToMany(mappedBy = "tour", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonManagedReference
+    private List<TourSchedule> tourSchedules;
+
 }

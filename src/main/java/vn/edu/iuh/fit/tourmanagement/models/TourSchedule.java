@@ -1,4 +1,5 @@
 package vn.edu.iuh.fit.tourmanagement.models;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -20,7 +21,8 @@ public class TourSchedule {
     private Long scheduleId;
 
     @ManyToOne
-    @JoinColumn(name = "tour_id")
+    @JoinColumn(name = "tour_id", nullable = false)
+    @JsonBackReference
     private Tour tour;
 
     @Column(name = "day_number")
@@ -43,6 +45,5 @@ public class TourSchedule {
 
     @Column(name = "departure_time")
     private LocalTime departureTime;
-
 
 }
