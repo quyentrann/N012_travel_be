@@ -15,7 +15,7 @@ import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthResponse;
 import vn.edu.iuh.fit.tourmanagement.services.AuthJWTService;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 

@@ -13,7 +13,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:3000", "https://de-smba.onrender.com") // Đảm bảo đúng frontend URL
+                        .allowedOrigins("http://localhost:5173","http://localhost:3000", "https://de-smba.onrender.com") // Đảm bảo đúng frontend URL
                         .allowedHeaders("*")
                         .allowedMethods("*");
 //                        .allowCredentials(true); // Cho phép cookie/token nếu cần

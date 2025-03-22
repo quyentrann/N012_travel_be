@@ -35,7 +35,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.disable()) // Disabling CORS (configure if needed)
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers("/auth/**").permitAll()   // Allow public access to auth endpoints
+                                .requestMatchers("/api/auth/**").permitAll()   // Allow public access to auth endpoints
                                 .requestMatchers("/file/**").permitAll()   // Allow public access to file endpoints
                                 .requestMatchers("/api/user/**").permitAll() // Allow public access to user endpoints
                                 .requestMatchers("api/tours/**").permitAll()
