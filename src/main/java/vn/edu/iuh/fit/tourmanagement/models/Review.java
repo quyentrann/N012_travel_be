@@ -1,4 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.models;
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,7 +13,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "tour")
 public class Review {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,7 +21,15 @@ public class Review {
     private Long reviewId;
 
     @ManyToOne
+    @JoinColumn(name = "tour_id", nullable = false) // Liên kết với Tour
+//    @JsonBackReference
+    @JsonIgnore
+    private Tour tour;
+
+    @ManyToOne
     @JoinColumn(name = "customer_id")
+//    @JsonBackReference
+    @JsonIgnore
     private Customer customer;
 
     @OneToOne
