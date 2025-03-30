@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
+import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
 import java.util.List;
@@ -16,6 +17,9 @@ public class TourController {
 
     @Autowired
     private TourService tourService;
+
+    @Autowired
+    private TourRepository tourRepository;
 
     @GetMapping
     public ResponseEntity<List<Tour>> getAllTours() {
