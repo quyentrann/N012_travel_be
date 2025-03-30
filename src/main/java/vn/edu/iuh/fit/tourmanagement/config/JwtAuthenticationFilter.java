@@ -68,6 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (NoSuchElementException ex) {
             ex.printStackTrace();
         }
+
         filterChain.doFilter(request, response);
     }
 }
