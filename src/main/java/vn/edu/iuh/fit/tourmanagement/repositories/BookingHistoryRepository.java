@@ -8,12 +8,10 @@ import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 
 import java.util.List;
 
-public interface TourBookingRepository extends JpaRepository<TourBooking, Long> {
+public interface BookingHistoryRepository extends JpaRepository<BookingHistory, Long> {
+    List<BookingHistory> findByTour_TourId(Long tourId);
 
-    @Query("SELECT tb FROM TourBooking tb WHERE tb.customer.customerId = :customerId")
-    List<TourBooking> findByCustomerId(@Param("customerId") Long customerId);
-
-//    List<BookingHistory> findByTour_TourId(Long tourId);
-
+    @Query("SELECT b FROM TourBooking b JOIN FETCH b.tour WHERE b.customer.customerId = :customerId")
+    List<TourBooking> getBookingHistoryByCustomerId(@Param("customerId") Long customerId);
 
 }

@@ -12,11 +12,12 @@ public class CorsConfig {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:5173","http://localhost:3000", "https://de-smba.onrender.com") // Đảm bảo đúng frontend URL
+                registry.addMapping("/api/**")
+                        .allowedOrigins("http://localhost:5173") // Địa chỉ của frontend
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
-                        .allowedMethods("*");
-//                        .allowCredentials(true); // Cho phép cookie/token nếu cần
+                        .allowCredentials(true); // Nếu sử dụng cookie/token
+                System.out.println("🔥 CORS Config Loaded!"); // Debug log
             }
         };
     }

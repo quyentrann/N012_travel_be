@@ -13,7 +13,7 @@ import java.time.LocalTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "tour")
 public class TourSchedule {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

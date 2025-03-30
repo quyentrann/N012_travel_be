@@ -19,6 +19,9 @@ public class UserService implements UserDetailsService {
     private UserRepository userRepository;
 
 
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email).orElse(null);
+    }
 
     public User getUserById(Long id) {
         return userRepository.findById(id).orElse(null);

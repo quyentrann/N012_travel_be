@@ -1,6 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
@@ -23,7 +24,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "customer")
 public class User extends Auditable implements Serializable, UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,6 +46,10 @@ public class User extends Auditable implements Serializable, UserDetails {
     @Enumerated(EnumType.STRING)
     private UserStatus status;
 
+    @OneToOne(mappedBy = "user")
+//    @JsonIgnore
+    @JsonManagedReference
+    private Customer customer;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

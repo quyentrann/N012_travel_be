@@ -12,15 +12,15 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = "tour")
 public class TourDetail {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "detail_id")
-    private Long DetailId;
+    private Long detailId;
 
-    @ManyToOne
-    @JoinColumn(name = "tour_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tour_id", nullable = false)
     @JsonBackReference
     private Tour tour;
 
