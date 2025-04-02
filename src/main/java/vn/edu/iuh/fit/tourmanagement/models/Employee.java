@@ -23,10 +23,10 @@ public class Employee {
     private String fullName;
 
     @Column(name = "dob")
-    private LocalDate DOB;
+    private LocalDate dob;
 
     @Column(name = "phone_number")
-    private String phongNumber;
+    private String phoneNumber;
 
     @OneToOne
     @JoinColumn(name = "user_id")

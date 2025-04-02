@@ -1,5 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.models;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
@@ -14,14 +16,14 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@ToString
+@ToString(exclude = {"tourDetails", "tourSchedules", "reviews"})
 public class Tour {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "tour_id")
     private Long tourId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tour_category_id")
     private TourCategory tourcategory;
 
@@ -37,7 +39,7 @@ public class Tour {
     @Column(name = "location")
     private String location;
 
-    @Column(name = "description")
+    @Column(name = "description", length = 1000)
     private String description;
 
     @Column(name = "status")
@@ -47,6 +49,12 @@ public class Tour {
     @Column(name = "image_url")
     private String imageURL;
 
+    @Column(name = "highlights", length = 1000)
+    private String highlights; // Điểm nhấn hành trình
+
+    @Column(name = "experiences", length = 2000)
+    private String experiences; // Trải nghiệm thú vị
+
     @OneToMany(mappedBy = "tour", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JsonManagedReference
     private List<TourDetail> tourDetails;
@@ -55,4 +63,8 @@ public class Tour {
     @JsonManagedReference
     private List<TourSchedule> tourSchedules;
 
+    @OneToMany(mappedBy = "tour", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
+    private List<Review> reviews;
 }
+

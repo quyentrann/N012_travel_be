@@ -2,6 +2,8 @@ package vn.edu.iuh.fit.tourmanagement.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import java.util.List;
@@ -20,6 +22,17 @@ public class TourService {
     public Tour getTourById(Long id) {
         Optional<Tour> tour = tourRepository.findById(id);
         return tour.orElse(null);
+    }
+    public Optional<Tour> findById(Long id) {
+        Optional<Tour> tour = tourRepository.findById(id);
+        return tour;
+    }
+
+
+    @Transactional
+    public List<Review> getTourReviews(Long tourId) {
+        Tour tour = tourRepository.findById(tourId).orElseThrow(() -> new RuntimeException("Tour không tồn tại"));
+        return tour.getReviews(); // Lúc này Hibernate mới load dữ liệu
     }
 
     public Tour createTour(Tour tour) {

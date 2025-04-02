@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthRequest;
+import vn.edu.iuh.fit.tourmanagement.dto.AuthRequest;
 import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthResponse;
 import vn.edu.iuh.fit.tourmanagement.services.AuthJWTService;
 
@@ -23,8 +23,15 @@ public class AuthController {
     private AuthJWTService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest authRequest) {
-        return ResponseEntity.ok(authService.register(authRequest));
+    public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
+        AuthResponse response = authService.register(request);
+
+        if (response == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(AuthResponse.builder().message("Email already exists").build());
+        }
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")

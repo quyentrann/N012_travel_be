@@ -1,12 +1,13 @@
 package vn.edu.iuh.fit.tourmanagement.services;
 
+import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.crossstore.ChangeSetPersister;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthRequest;
+import vn.edu.iuh.fit.tourmanagement.dto.AuthRequest;
 import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthResponse;
 import vn.edu.iuh.fit.tourmanagement.enums.UserRole;
 import vn.edu.iuh.fit.tourmanagement.enums.UserStatus;
@@ -35,37 +36,55 @@ public class AuthJWTService {
     @Autowired
     private AuthenticationManager authenticationManager;
 
+    @Autowired
+    private MailService mailService;
+
     public AuthJWTService(PasswordEncoder passwordEncoder) {
         this.passwordEncoder = passwordEncoder;
     }
 
     public AuthResponse register(AuthRequest request) {
-        User user = User.builder()
+        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+
+        if (existingUser.isPresent()) {
+            User dbUser = existingUser.get();
+
+            // Nếu tài khoản đã tồn tại và đang ở trạng thái PENDING, gửi lại OTP
+            if (dbUser.getStatus() == UserStatus.PENDING) {
+                try {
+                    mailService.sendOtpEmail(request.getEmail());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                return AuthResponse.builder()
+                        .message("OTP sent again. Complete verification to activate your account.")
+                        .build();
+            }
+
+            // Nếu tài khoản đã ACTIVE thì không cho đăng ký lại
+            return AuthResponse.builder()
+                    .message("Email already exists")
+                    .build();
+        }
+
+        // Nếu email chưa tồn tại, tạo tài khoản mới
+        User newUser = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(UserRole.CUSTOMER)
-                .status(UserStatus.ACTIVE)
+                .status(UserStatus.PENDING)
                 .build();
-        User newUser = userRepository.save(user);
-        Customer customer = customerRepository.save(Customer.builder()
-                .fullName(request.getFullName())
-                .DOB(request.getDOB())
-                .address(request.getAddress())
-                .user(user)
-                .gender(request.isGender())
-                .build());
+        userRepository.save(newUser);
 
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("user", customer.toString());
-
-        String refreshToken = jwtService.generateRefreshToken(claims,newUser);
-        String token = jwtService.generateToken(claims,newUser);
+        try {
+            mailService.sendOtpEmail(request.getEmail());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         return AuthResponse.builder()
-                .token(token)
-                .refreshToken(refreshToken)
-                .user(newUser)
-                .exp(new Date(System.currentTimeMillis() + EXPIRATION_TIME_ACCESS_TOKEN).getTime())
+                .message("User registered. OTP sent to email.")
                 .build();
     }
 
