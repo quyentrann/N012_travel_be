@@ -19,11 +19,11 @@ public class ReviewController {
     private final ReviewRepository reviewRepository;
 
     @PostMapping("/create")
-    public ResponseEntity<Review> createReview(@RequestParam Long bookingId,
-                                               @RequestParam byte rating,
-                                               @RequestParam String comment) {
-        Review newReview = reviewService.createReview(bookingId, rating, comment);
-        return ResponseEntity.ok(newReview);
+    public ResponseEntity<ReviewDTO> createReview(@RequestParam Long bookingId,
+                                                  @RequestParam byte rating,
+                                                  @RequestParam String comment) {
+        ReviewDTO newReviewDTO = reviewService.createReview(bookingId, rating, comment);
+        return ResponseEntity.ok(newReviewDTO);
     }
 
     @GetMapping("/reviews/by-tour/{tourId}")
@@ -34,11 +34,14 @@ public class ReviewController {
                         review.getReviewId(),
                         review.getComment(),
                         review.getRating(),
-                        review.getReviewDate()
+                        review.getReviewDate(),
+                        review.getCustomer() != null ? review.getCustomer().getFullName() : "N/A", // Kiểm tra null
+                        review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null // Kiểm tra null
                 ))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(reviews);
     }
+
 
 }

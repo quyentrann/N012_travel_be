@@ -1,6 +1,8 @@
 package vn.edu.iuh.fit.tourmanagement.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
@@ -14,6 +16,8 @@ public class TourService {
 
     @Autowired
     private TourRepository tourRepository;
+
+
 
     public List<Tour> getAllTours() {
         return tourRepository.findAll();
@@ -29,6 +33,21 @@ public class TourService {
         Tour tour = tourRepository.findById(tourId).orElseThrow(() -> new RuntimeException("Tour không tồn tại"));
         return tour.getReviews(); // Lúc này Hibernate mới load dữ liệu
     }
+
+    public List<Tour> getSimilarTours(Long currentTourId) {
+        // Lấy thông tin tour hiện tại
+        Tour currentTour = tourRepository.findById(currentTourId)
+                .orElseThrow(() -> new RuntimeException("Tour không tồn tại"));
+
+        // Gọi repository để lấy danh sách các tour tương tự
+        return tourRepository.findSimilarTours(
+                currentTourId,  // Tour ID để loại trừ tour hiện tại
+                currentTour.getName(),  // Tên tour hiện tại
+                currentTour.getLocation()  // Địa điểm tour hiện tại
+        );
+    }
+
+
 
     public Tour createTour(Tour tour) {
         return tourRepository.save(tour);
