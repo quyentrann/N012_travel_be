@@ -53,4 +53,6 @@ public class TourBooking {
     @JoinColumn(name = "discount_id")
     private Discount discount;
 
+
+
 }

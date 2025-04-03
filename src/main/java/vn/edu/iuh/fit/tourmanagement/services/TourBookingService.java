@@ -142,13 +142,25 @@ public class TourBookingService {
         TourBooking booking = tourBookingRepository.findById(bookingId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking"));
 
-        if (booking.getStatus() == BookingStatus.CANCELED) {
-            throw new IllegalStateException("Booking đã bị hủy trước đó!");
+        // Kiểm tra trạng thái của booking, không cho hủy nếu đã hủy, hoàn thành, hoặc đang thực hiện tour
+        if (booking.getStatus() == BookingStatus.CANCELED ||
+                booking.getStatus() == BookingStatus.COMPLETED ||
+                booking.getStatus() == BookingStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Không thể hủy booking với trạng thái hiện tại: " + booking.getStatus());
         }
 
-        // Tính phí hủy và số tiền hoàn lại
-        double cancellationFee = calculateCancellationFee(booking, cancelDate, isHoliday);
-        double refundAmount = booking.getTotalPrice() - cancellationFee;
+        // Nếu chưa thanh toán, không hoàn tiền khi hủy
+        double cancellationFee = 0;
+        double refundAmount = 0;
+
+        if (booking.getStatus() == BookingStatus.PAID) {
+            // Nếu đã thanh toán, tính phí hủy và số tiền hoàn lại
+            cancellationFee = calculateCancellationFee(booking, cancelDate, isHoliday);
+            refundAmount = booking.getTotalPrice() - cancellationFee;
+        } else {
+            // Nếu chưa thanh toán, không hoàn lại tiền
+            refundAmount = 0;
+        }
 
         // Lưu lịch sử hủy
         BookingHistory history = BookingHistory.builder()
@@ -158,7 +170,7 @@ public class TourBookingService {
                 .changeDate(LocalDateTime.now())
                 .reason(reason)
                 .cancellationFee(cancellationFee)
-                .refundAmount(refundAmount)  // Lưu số tiền hoàn lại
+                .refundAmount(refundAmount)  // Lưu số tiền hoàn lại, nếu có
                 .tour(booking.getTour())
                 .build();
         bookingHistoryRepository.save(history);
@@ -171,10 +183,12 @@ public class TourBookingService {
         CancelResponse response = new CancelResponse();
         response.setMessage("Booking đã được hủy thành công!");
         response.setCancellationFee(cancellationFee);
-        response.setRefundAmount(refundAmount);
+        response.setRefundAmount(refundAmount);  // Số tiền hoàn lại nếu có
 
         return response;
     }
+
+
 
 
 
@@ -217,6 +231,13 @@ public class TourBookingService {
 
         return cancellationFee;
     }
+    public Optional<TourBooking> getBookingById(Long id) {
+        return tourBookingRepository.findById(id);
+    }
+
+    public TourBooking updateBooking(TourBooking booking) {
+        return tourBookingRepository.save(booking);
+    }
 
     public TourBookingDetailDTO getTourBookingDetailById(Long bookingId) {
         TourBooking booking = tourBookingRepository.findById(bookingId)
@@ -226,6 +247,26 @@ public class TourBookingService {
         return new TourBookingDetailDTO(booking);
     }
 
+    public void updatePaymentStatus(Long bookingId, boolean isSuccess) {
+        TourBooking booking = tourBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Booking không tồn tại"));
+
+        if (isSuccess) {
+            if (booking.getStatus() != BookingStatus.PAID) {
+                booking.setStatus(BookingStatus.PAID);
+                tourBookingRepository.save(booking);
+            } else {
+                throw new IllegalStateException("Booking đã được thanh toán.");
+            }
+        } else {
+            if (booking.getStatus() != BookingStatus.CANCELED) {
+                booking.setStatus(BookingStatus.CANCELED);
+                tourBookingRepository.save(booking);
+            } else {
+                throw new IllegalStateException("Booking đã bị hủy.");
+            }
+        }
+    }
 
 
     public List<BookingHistory> getBookingHistory(Long bookingId) {
