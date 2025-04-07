@@ -64,6 +64,7 @@ public class SecurityConfig {
                                 .requestMatchers("/api/bookings/cancel/**").permitAll()
                                 .requestMatchers("/api/reviews/reviews/by-tour/**").permitAll()
                                 .requestMatchers("/api/payment/**").permitAll()
+                                .requestMatchers("/api/reviews/submit").authenticated()
                                 .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

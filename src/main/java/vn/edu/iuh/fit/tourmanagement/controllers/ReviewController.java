@@ -1,7 +1,9 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.dto.ReviewDTO;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
@@ -42,6 +44,25 @@ public class ReviewController {
 
         return ResponseEntity.ok(reviews);
     }
+
+    @PostMapping("/submit")
+    public ResponseEntity<?> submitReview(@RequestParam Long bookingId,
+                                          @RequestParam byte rating,
+                                          @RequestParam String comment,
+                                          Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Bạn cần đăng nhập để đánh giá!");
+        }
+
+        try {
+            ReviewDTO reviewDTO = reviewService.submitReview(bookingId, rating, comment, authentication);
+            return ResponseEntity.ok(reviewDTO);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+
 
 
 }

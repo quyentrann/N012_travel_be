@@ -1,5 +1,9 @@
 package vn.edu.iuh.fit.tourmanagement.services;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,6 +70,42 @@ public class TourService {
         }
         tourRepository.deleteById(id);
         return true;
+    }
+
+    public List<Tour> getToursWithFilters(Double price, String location, Boolean popular, LocalDate startDate, Integer duration, Integer availableSlots, String experienceType) {
+        // Nếu không có tham số nào, trả về tất cả các tour
+        if (price == null && location == null && !popular && startDate == null && duration == null && availableSlots == null && experienceType == null) {
+            return tourRepository.findAll();
+        }
+
+        // Nếu có tham số, lọc tour theo các điều kiện
+        return tourRepository.findAll((Root<Tour> root, CriteriaQuery<?> query, CriteriaBuilder cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (price != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("price"), price));
+            }
+            if (location != null) {
+                predicates.add(cb.like(root.get("location"), "%" + location + "%"));
+            }
+            if (popular != null && popular) {
+                predicates.add(cb.greaterThan(root.get("reviews").get("rating"), 4.0)); // Ví dụ: tour có rating > 4 là phổ biến
+            }
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("startDate"), startDate));
+            }
+            if (duration != null) {
+                predicates.add(cb.equal(root.get("duration"), duration));
+            }
+            if (availableSlots != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("availableSlot"), availableSlots));
+            }
+            if (experienceType != null) {
+                predicates.add(cb.like(root.get("experiences"), "%" + experienceType + "%"));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        });
     }
 
 

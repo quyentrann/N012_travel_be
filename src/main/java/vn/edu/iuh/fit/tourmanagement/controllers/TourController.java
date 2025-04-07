@@ -1,6 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +10,7 @@ import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,6 +24,7 @@ public class TourController {
 
     @Autowired
     private TourRepository tourRepository;
+
 
     @GetMapping
     public ResponseEntity<List<TourDTO>> getAllTours() {
@@ -233,5 +236,21 @@ public class TourController {
         }
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
+
+    @GetMapping("/suggest")
+    public ResponseEntity<List<Tour>> suggestTours(
+            @RequestParam(value = "price", required = false) Double price,
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "popular", required = false) Boolean popular,
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam(value = "duration", required = false) Integer duration,
+            @RequestParam(value = "availableSlots", required = false) Integer availableSlots,
+            @RequestParam(value = "experienceType", required = false) String experienceType) {
+
+        List<Tour> tours = tourService.getToursWithFilters(price, location, popular, startDate, duration, availableSlots, experienceType);
+        return ResponseEntity.ok(tours);
+    }
+
+
 
 }
