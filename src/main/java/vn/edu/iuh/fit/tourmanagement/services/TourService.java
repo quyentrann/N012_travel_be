@@ -5,24 +5,35 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 public class TourService {
 
     @Autowired
     private TourRepository tourRepository;
+
+    @Autowired
+    private RestTemplate restTemplate;
 
 
 
@@ -108,6 +119,19 @@ public class TourService {
         });
     }
 
+    public List<Tour> searchTours(String keyword) {
+        String normalizedKeyword = removeAccents(keyword.toLowerCase());
+
+        return tourRepository.findAll().stream()
+                .filter(tour -> removeAccents(tour.getName().toLowerCase()).contains(normalizedKeyword))
+                .collect(Collectors.toList());
+    }
+
+    private String removeAccents(String text) {
+        text = Normalizer.normalize(text, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        return pattern.matcher(text).replaceAll("");
+    }
 
 
 }

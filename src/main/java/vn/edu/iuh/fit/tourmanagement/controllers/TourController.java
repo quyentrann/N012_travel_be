@@ -251,6 +251,12 @@ public class TourController {
         return ResponseEntity.ok(tours);
     }
 
+    // Tìm kiếm các tour theo từ khóa trong tên tour hoặc mô tả
+    @GetMapping("/search")
+    public ResponseEntity<List<Tour>> search(@RequestParam String keyword) {
+        List<Tour> tours = tourService.searchTours(keyword);
+        return ResponseEntity.ok(tours);
+    }
 
 
 }

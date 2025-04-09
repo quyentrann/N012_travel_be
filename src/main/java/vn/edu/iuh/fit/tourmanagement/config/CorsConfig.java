@@ -13,11 +13,10 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
-                        .allowedOrigins("*") // Địa chỉ của frontend
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedOrigins("http://localhost:3000","http://localhost:5173", "http://52.77.233.97", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio")  // Địa chỉ của frontend
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS","HEAD")
                         .allowedHeaders("*")
-                        .allowCredentials(true); // Nếu sử dụng cookie/token
-                System.out.println("🔥 CORS Config Loaded!"); // Debug log
+                        .allowCredentials(true);  // Nếu bạn sử dụng cookie/tokens
             }
         };
     }

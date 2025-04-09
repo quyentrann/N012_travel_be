@@ -61,5 +61,7 @@ public interface TourRepository extends JpaRepository<Tour, Long>, JpaSpecificat
 //
 //    // Tìm tour theo loại trải nghiệm
 //    List<Tour> findByExperiencesContaining(String experienceType);
+@Query("SELECT t FROM Tour t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
+List<Tour> searchByKeyword(@Param("keyword") String keyword);
 
 }
