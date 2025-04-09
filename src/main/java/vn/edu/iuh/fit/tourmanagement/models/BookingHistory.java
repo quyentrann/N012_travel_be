@@ -42,9 +42,11 @@ public class BookingHistory {
     @JoinColumn(name = "tour_id")
     private Tour tour;
 
+
     @Column(name = "cancellation_fee")
     private double cancellationFee; // Thêm phí hủy
 
     @Column(name = "refund_amount")
     private double refundAmount; // Thêm số tiền hoàn lại
+
 }

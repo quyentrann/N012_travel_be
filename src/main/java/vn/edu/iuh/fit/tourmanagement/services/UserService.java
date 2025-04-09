@@ -5,10 +5,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import vn.edu.iuh.fit.tourmanagement.enums.UserStatus;
 import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.UserRepository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -62,6 +64,20 @@ public class UserService implements UserDetailsService {
             exception.printStackTrace();
         }
         return null;
+    }
+
+    public void partialUpdateUserStatus(Long id, Map<String, Object> updates) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        updates.forEach((key, value) -> {
+            switch (key) {
+                case "status" -> user.setStatus(
+                        UserStatus.valueOf(value.toString().toUpperCase())  // Chuyển String sang Enum
+                );
+            }
+        });
+        userRepository.save(user);
     }
 
     @Override

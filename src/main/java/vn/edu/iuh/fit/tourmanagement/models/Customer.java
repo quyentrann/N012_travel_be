@@ -44,6 +44,7 @@ public class Customer {
     @Column(name = "gender")
     private boolean gender;
 
+
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 

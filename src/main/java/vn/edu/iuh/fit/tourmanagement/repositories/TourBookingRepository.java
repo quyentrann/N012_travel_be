@@ -15,6 +15,7 @@ public interface TourBookingRepository extends JpaRepository<TourBooking, Long> 
     @Query("SELECT tb FROM TourBooking tb WHERE tb.customer.customerId = :customerId")
     List<TourBooking> findByCustomerId(@Param("customerId") Long customerId);
 
+
     Optional<TourBooking> findById(Long id);
 
 //    List<BookingHistory> findByTour_TourId(Long tourId);

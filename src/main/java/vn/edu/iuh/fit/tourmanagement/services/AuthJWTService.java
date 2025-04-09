@@ -45,7 +45,7 @@ public class AuthJWTService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public AuthResponse register(AuthRequest request) {
+   public AuthResponse register(AuthRequest request) {
         Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
 
         if (existingUser.isPresent()) {

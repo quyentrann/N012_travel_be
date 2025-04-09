@@ -13,4 +13,5 @@ public class CacheConfig {
     public CacheManager cacheManager() {
         return new CaffeineCacheManager("similarTours");
     }
+
 }
