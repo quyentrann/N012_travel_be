@@ -59,11 +59,6 @@ public class TourService {
         return tour.getReviews(); // Lúc này Hibernate mới load dữ liệu
     }
 
-    @Transactional
-    public List<Review> getTourReviews(Long tourId) {
-        Tour tour = tourRepository.findById(tourId).orElseThrow(() -> new RuntimeException("Tour không tồn tại"));
-        return tour.getReviews(); // Lúc này Hibernate mới load dữ liệu
-    }
 
     public List<Tour> getSimilarTours(Long currentTourId) {
         // Lấy thông tin tour hiện tại
