@@ -59,6 +59,7 @@ public class MailService {
     }
 
 
+
     private void sendOtpWithOtpCode(String toEmail, String otp) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true);
@@ -126,9 +127,8 @@ public class MailService {
             return expiryTime;
         }
     }
-
-
-    public void sendBookingConfirmationEmail(String toEmail, String customerName, String tourName,
+  
+public void sendBookingConfirmationEmail(String toEmail, String customerName, String tourName,
                                              String departureLocation, String departureDate, int numberPeople,
                                              double totalPrice, String paymentDeadline) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
@@ -161,8 +161,5 @@ public class MailService {
         mailSender.send(message);
         System.out.println("Email xác nhận đặt tour đã được gửi tới: " + toEmail);
     }
-
-
-
 }
 

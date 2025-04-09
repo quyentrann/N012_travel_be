@@ -12,7 +12,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import org.springframework.web.client.RestTemplate;
+
 import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
@@ -44,6 +46,17 @@ public class TourService {
     public Tour getTourById(Long id) {
         Optional<Tour> tour = tourRepository.findById(id);
         return tour.orElse(null);
+    }
+    public Optional<Tour> findById(Long id) {
+        Optional<Tour> tour = tourRepository.findById(id);
+        return tour;
+    }
+
+
+    @Transactional
+    public List<Review> getTourReviews(Long tourId) {
+        Tour tour = tourRepository.findById(tourId).orElseThrow(() -> new RuntimeException("Tour không tồn tại"));
+        return tour.getReviews(); // Lúc này Hibernate mới load dữ liệu
     }
 
     @Transactional

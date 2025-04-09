@@ -41,8 +41,10 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())  // Disabling CSRF for stateless API
                 .cors(cors -> cors.configurationSource(request -> {
                     CorsConfiguration config = new CorsConfiguration();
+
                     config.setAllowedOrigins(List.of("http://localhost:3000","http://localhost:5173", "http://52.77.233.97", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio"));
                     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS","HEAD"));
+
                     config.setAllowedHeaders(List.of("*"));
                     config.setAllowCredentials(true);
                     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -52,20 +54,28 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()  // ✅ FIX CORS
-                                .requestMatchers("/api/auth/**").permitAll()
+
+                             .requestMatchers("/api/auth/**").permitAll()
                                 .requestMatchers("/file/**").permitAll()
                                 .requestMatchers("/api/user/**").permitAll()
                                 .requestMatchers("/api/tours/**").permitAll()
+                                .requestMatchers("api/customers/**").permitAll()
                                 .requestMatchers("/api/bookings/**").authenticated()
-                                .requestMatchers("/api/discounts").permitAll()
+                                .requestMatchers("api/tour-details/**").permitAll()
+                                .requestMatchers("api/discounts/**").permitAll()
+                                .requestMatchers("api/employees/**").permitAll()
                                 .requestMatchers("/api/users/**").permitAll()
                                 .requestMatchers("/api/bookings/history").authenticated()
+                                .requestMatchers("api/schedules/**").permitAll()
+                                .requestMatchers("api/categories/**").permitAll()
+                                .requestMatchers("api/recommendations/**").permitAll()
                                 .requestMatchers("/api/otp/**").permitAll()
                                 .requestMatchers("/api/bookings/cancel/**").permitAll()
                                 .requestMatchers("/api/reviews/reviews/by-tour/**").permitAll()
                                 .requestMatchers("/api/payment/**").permitAll()
                                 .requestMatchers("/api/reviews/submit").authenticated()
                                 .anyRequest().authenticated()
+
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())

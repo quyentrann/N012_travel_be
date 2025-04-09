@@ -111,6 +111,15 @@ public class UserController {
         }
     }
 
+    @PatchMapping("/status/{id}")
+    public ResponseEntity<String> updateStatus(@PathVariable Long id, @RequestBody Map<String, Object> updates) {
+        try {
+            userService.partialUpdateUserStatus(id, updates);
+            return ResponseEntity.ok("User updated successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 
     
 }
