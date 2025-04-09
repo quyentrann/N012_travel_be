@@ -26,6 +26,10 @@ public class Customer {
     @Column(name = "full_name", length = 255)
     private String fullName;
 
+    @Column(name = "phone_number")
+    private String phoneNumber;
+
+
     @Column(name = "dob")
     private LocalDate dob;
 
@@ -39,6 +43,10 @@ public class Customer {
 
     @Column(name = "gender")
     private boolean gender;
+
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
 
     @OneToMany(mappedBy = "customer", fetch = FetchType.LAZY)
 //    @JsonManagedReference
