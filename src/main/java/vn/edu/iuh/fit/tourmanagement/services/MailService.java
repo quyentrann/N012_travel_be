@@ -60,34 +60,6 @@ public class MailService {
 
 
 
-//    public boolean sendOtpEmail(String toEmail) {
-//        try {
-//            // Nếu đã có OTP nhưng chưa hết hạn, không gửi lại
-//            OtpInfo existingOtp = otpStore.get(toEmail);
-//            if (existingOtp != null && existingOtp.getExpiryTime() > System.currentTimeMillis()) {
-//                System.out.println("OTP for this email is still valid.");
-//                return false;
-//            }
-//
-//            // Xóa OTP cũ nếu có
-//            otpStore.remove(toEmail);
-//
-//            // Tạo OTP mới
-//            String otp = generateOtp();
-//            long expiryTime = System.currentTimeMillis() + OTP_EXPIRY_TIME;
-//
-//            // Lưu OTP mới
-//            otpStore.put(toEmail, new OtpInfo(otp, expiryTime));
-//
-//            // Gửi OTP qua email
-//            sendOtpWithOtpCode(toEmail, otp);
-//            return true;
-//        } catch (Exception e) {
-//            System.err.println("Error sending OTP: " + e.getMessage());
-//            return false;
-//        }
-//    }
-
     private void sendOtpWithOtpCode(String toEmail, String otp) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true);
@@ -154,6 +126,40 @@ public class MailService {
         public long getExpiryTime() {
             return expiryTime;
         }
+    }
+  
+public void sendBookingConfirmationEmail(String toEmail, String customerName, String tourName,
+                                             String departureLocation, String departureDate, int numberPeople,
+                                             double totalPrice, String paymentDeadline) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
+        helper.setSubject("Xác nhận đặt tour thành công");
+
+        String emailContent = String.format(
+                "Chào %s,\n\n"
+                        + "Cảm ơn bạn đã đặt tour với chúng tôi! Dưới đây là thông tin chi tiết về chuyến đi của bạn:\n\n"
+                        + "Tên tour: %s\n"
+                        + "Nơi khởi hành: %s\n"
+                        + "Ngày khởi hành: %s\n"
+                        + "Số người tham gia: %d\n"
+                        + "Số tiền cần thanh toán: %,d VNĐ\n"
+                        + "Hạn thanh toán: %s\n\n"
+                        + "Trạng thái: CHƯA THANH TOÁN\n"
+                        + "Vui lòng hoàn tất thanh toán trước hạn để giữ chỗ của bạn.\n\n"
+                        + "Nếu có bất kỳ thắc mắc nào, hãy liên hệ ngay với chúng tôi.\n\n"
+                        + "Chúc bạn có một chuyến đi tuyệt vời!\n"
+                        + "Trân trọng,\n"
+                        + "Đội ngũ hỗ trợ Tour Management.",
+                customerName, tourName, departureLocation, departureDate,
+                numberPeople, (long) totalPrice, paymentDeadline
+        );
+
+        helper.setText(emailContent);
+        mailSender.send(message);
+        System.out.println("Email xác nhận đặt tour đã được gửi tới: " + toEmail);
     }
 }
 

@@ -5,15 +5,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDTO;
-import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
+import vn.edu.iuh.fit.tourmanagement.dto.*;
 import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
+import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.services.TourBookingService;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 @RestController
@@ -54,6 +56,23 @@ public class TourBookingCotroller {
         }
     }
 
+    @PutMapping("/cancel/{bookingId}")
+    public ResponseEntity<?> cancelBooking(@PathVariable Long bookingId, @RequestBody CancelRequest cancelRequest) {
+        try {
+            // Gọi service để xử lý hủy và tính phí hủy
+            CancelResponse result = tourBookingService.cancelBooking(bookingId, cancelRequest.getReason(), cancelRequest.getCancelDate(), cancelRequest.isHoliday());
+
+            // Trả về thông tin thành công cùng với phí hủy và số tiền hoàn lại
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", e.getMessage()));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Collections.singletonMap("error", e.getMessage()));
+        }
+    }
+
 
     @GetMapping("/history")
     public ResponseEntity<List<TourBookingDTO>> getBookingHistoryByCustomer(Authentication authentication) {
@@ -86,6 +105,25 @@ public class TourBookingCotroller {
         ).collect(Collectors.toList());
 
         return ResponseEntity.ok(bookingDTOs);
+    }
+
+    @GetMapping("/history/{bookingId}")
+    public ResponseEntity<TourBookingDetailDTO> getBookingDetailById(@PathVariable Long bookingId, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+
+        try {
+            TourBookingDetailDTO bookingDetail = tourBookingService.getTourBookingDetailById(bookingId);
+            return ResponseEntity.ok(bookingDetail);
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
 }

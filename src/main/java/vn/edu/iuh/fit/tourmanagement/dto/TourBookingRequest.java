@@ -18,4 +18,9 @@ public class TourBookingRequest {
     private int numberPeople;       // Số lượng người tham gia tour
 //    private Long discountCode;
     private double totalPrice;
+
+//    private boolean isHoliday;
+    private String fullName;  // ✅ Thêm họ tên
+    private String phoneNumber;
+
 }

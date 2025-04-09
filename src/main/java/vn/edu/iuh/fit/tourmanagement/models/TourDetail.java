@@ -35,4 +35,12 @@ public class TourDetail {
 
     @Column(name = "end_date")
     private LocalDate endDate;
+
+    // Calculate duration dynamically, when needed.
+    public long getDurationInDays() {
+        if (startDate != null && endDate != null) {
+            return java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate);
+        }
+        return 0;
+    }
 }
