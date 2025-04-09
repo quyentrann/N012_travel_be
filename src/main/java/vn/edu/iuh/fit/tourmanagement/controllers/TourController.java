@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import vn.edu.iuh.fit.tourmanagement.dto.tour.TourRequest;
 import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourCategory;
@@ -34,9 +35,6 @@ public class TourController {
     private TourService tourService;
     @Autowired
     private TourCategoryService categoryService;
-
-    @Autowired
-    private TourRepository tourRepository;
 
     @Autowired
     private TourRepository tourRepository;
