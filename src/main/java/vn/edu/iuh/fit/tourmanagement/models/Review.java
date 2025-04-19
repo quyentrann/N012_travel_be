@@ -1,11 +1,11 @@
 package vn.edu.iuh.fit.tourmanagement.models;
-import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+
 @Entity
 @Table(name = "review")
 @Getter
@@ -21,14 +21,12 @@ public class Review {
     private Long reviewId;
 
     @ManyToOne
-    @JoinColumn(name = "tour_id", nullable = false) // Liên kết với Tour
-//    @JsonBackReference
+    @JoinColumn(name = "tour_id", nullable = false)
     @JsonIgnore
     private Tour tour;
 
     @ManyToOne
     @JoinColumn(name = "customer_id")
-//    @JsonBackReference
     @JsonIgnore
     private Customer customer;
 
@@ -37,7 +35,7 @@ public class Review {
     private TourBooking booking;
 
     @Column(name = "rating")
-    private byte rating;
+    private float rating; // Đổi sang float
 
     @Column(name = "comment")
     private String comment;

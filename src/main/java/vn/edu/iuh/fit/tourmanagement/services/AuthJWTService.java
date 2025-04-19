@@ -18,6 +18,7 @@ import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.CustomerRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.UserRepository;
 
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -45,16 +46,31 @@ public class AuthJWTService {
         this.passwordEncoder = passwordEncoder;
     }
 
-   public AuthResponse register(AuthRequest request) {
-        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+    public AuthResponse register(AuthRequest request) {
+        // Kiểm tra dữ liệu đầu vào
+        if (request.getEmail() == null || request.getEmail().trim().isEmpty() || !request.getEmail().matches("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
+            return AuthResponse.builder().message("Email không hợp lệ hoặc để trống.").build();
+        }
+        if (request.getPassword() == null || request.getPassword().length() < 6) {
+            return AuthResponse.builder().message("Mật khẩu phải có ít nhất 6 ký tự.").build();
+        }
+        if (request.getFullName() == null || request.getFullName().trim().isEmpty()) {
+            return AuthResponse.builder().message("Họ tên không được để trống.").build();
+        }
+        if (request.getPhoneNumber() == null || !request.getPhoneNumber().matches("^\\d{10}$")) {
+            return AuthResponse.builder().message("Số điện thoại phải có 10 chữ số.").build();
+        }
+        if (request.getDob() != null && request.getDob().isAfter(LocalDate.now())) {
+            return AuthResponse.builder().message("Ngày sinh phải là ngày trong quá khứ.").build();
+        }
 
+        // Kiểm tra email đã tồn tại
+        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
         if (existingUser.isPresent()) {
             User dbUser = existingUser.get();
-
-            // Nếu tài khoản là PENDING, gửi lại OTP
             if (dbUser.getStatus() == UserStatus.PENDING) {
                 try {
-                    mailService.sendOtpEmail(request.getEmail()); // Gửi OTP
+                    mailService.sendOtpEmail(request.getEmail());
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -62,31 +78,33 @@ public class AuthJWTService {
                         .message("OTP đã được gửi lại. Vui lòng hoàn tất xác thực để kích hoạt tài khoản.")
                         .build();
             }
-
-            // Nếu tài khoản đã tồn tại (ACTIVE, DISABLED, BLOCKED)
             return AuthResponse.builder()
                     .message("Tài khoản đã tồn tại.")
                     .build();
         }
 
-
-        // Nếu tài khoản chưa tồn tại, tạo tài khoản mới
+        // Tạo User mới
         User newUser = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(UserRole.CUSTOMER)
-                .status(UserStatus.PENDING) // Đặt trạng thái là PENDING
+                .status(UserStatus.PENDING)
                 .build();
-        newUser = userRepository.save(newUser); // Đảm bảo User có ID
+        newUser = userRepository.save(newUser);
 
-        // **Tạo Customer sau khi User có ID**
+        // Tạo Customer
         Customer newCustomer = Customer.builder()
                 .user(newUser)
+                .fullName(request.getFullName())
+                .phoneNumber(request.getPhoneNumber())
+                .dob(request.getDob())
+                .address(request.getAddress())
+                .gender(request.isGender())
                 .build();
         customerRepository.save(newCustomer);
 
         try {
-            mailService.sendOtpEmail(request.getEmail()); // Gửi OTP khi đăng ký thành công
+            mailService.sendOtpEmail(request.getEmail());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -95,6 +113,36 @@ public class AuthJWTService {
                 .message("User registered. OTP sent to email.")
                 .build();
     }
+
+    public AuthResponse resetPassword(String email, String newPassword) {
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        if (userOptional.isEmpty()) {
+            return AuthResponse.builder().message("Email không tồn tại.").build();
+        }
+
+        User user = userOptional.get();
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        return AuthResponse.builder().message("Đặt lại mật khẩu thành công.").build();
+    }
+
+
+    private Map<String, String> otpStorage = new HashMap<>(); // Map<email, otp>
+
+    public AuthResponse verifyOtp(String email, String otp) {
+        String storedOtp = otpStorage.get(email);
+        if (storedOtp == null || !storedOtp.equals(otp)) {
+            return AuthResponse.builder().message("OTP sai hoặc đã hết hạn.").build();
+        }
+        return AuthResponse.builder().message("OTP hợp lệ. Bạn có thể đặt lại mật khẩu.").build();
+    }
+
+    public void storeOtp(String email, String otp) {
+        otpStorage.put(email, otp);
+    }
+
+
 
 //    public AuthResponse authentication(String email, String password) {
 //        User user = userRepository.findByEmail(email)

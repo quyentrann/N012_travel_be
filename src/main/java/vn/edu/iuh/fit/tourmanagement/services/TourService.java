@@ -25,19 +25,22 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class TourService {
-
+    private static final Logger logger = Logger.getLogger(TourService.class.getName());
     @Autowired
     private TourRepository tourRepository;
 
     @Autowired
     private RestTemplate restTemplate;
 
-
+    public TourService(TourRepository tourRepository) {
+        this.tourRepository = tourRepository;
+    }
 
     public List<Tour> getAllTours() {
         return tourRepository.findAll();
@@ -127,18 +130,74 @@ public class TourService {
         });
     }
 
-    public List<Tour> searchTours(String keyword) {
-        String normalizedKeyword = removeAccents(keyword.toLowerCase());
+    public List<Tour> searchTours(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            logger.info("Empty query, returning empty list");
+            return List.of();
+        }
 
-        return tourRepository.findAll().stream()
-                .filter(tour -> removeAccents(tour.getName().toLowerCase()).contains(normalizedKeyword))
+        String normalizedQuery = normalizeString(query.trim());
+        logger.info("Normalized query: " + normalizedQuery);
+
+        List<Tour> allTours = tourRepository.findAll();
+
+        return allTours.stream()
+                .filter(tour -> {
+                    String name = normalizeString(tour.getName());
+                    String location = normalizeString(tour.getLocation());
+                    String description = normalizeString(tour.getDescription());
+                    String category = tour.getTourcategory() != null ? normalizeString(tour.getTourcategory().getCategoryName()) : "";
+
+                    // Kiểm tra chuỗi con
+                    boolean matches = name.contains(normalizedQuery) ||
+                            location.contains(normalizedQuery) ||
+                            description.contains(normalizedQuery) ||
+                            category.contains(normalizedQuery);
+                    if (matches) {
+                        logger.info("Matched tour ID: " + tour.getTourId() + ", location: " + tour.getLocation());
+                    }
+                    return matches;
+                })
                 .collect(Collectors.toList());
     }
+
+    private String normalizeString(String input) {
+        if (input == null) {
+            return "";
+        }
+        // Chuyển chữ thường, thay dấu phẩy bằng khoảng trắng
+        String normalized = input.toLowerCase().replace(",", " ");
+        // Bỏ dấu tiếng Việt
+        normalized = normalized.replaceAll("[àáạảãâầấậẩẫăằắặẳẵ]", "a")
+                .replaceAll("[èéẹẻẽêềếệểễ]", "e")
+                .replaceAll("[ìíịỉĩ]", "i")
+                .replaceAll("[òóọỏõôồốộổỗơờớợởỡ]", "o")
+                .replaceAll("[ùúụủũưừứựửữ]", "u")
+                .replaceAll("[ỳýỵỷỹ]", "y")
+                .replaceAll("đ", "d");
+        return normalized.trim();
+    }
+
+
 
     private String removeAccents(String text) {
         text = Normalizer.normalize(text, Normalizer.Form.NFD);
         Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
         return pattern.matcher(text).replaceAll("");
+    }
+
+    public List<Tour> getToursByCategory(Long categoryId) {
+        return tourRepository.findByTourcategory_CategoryId(categoryId);
+    }
+
+
+    // Lọc tour theo giá
+    public List<Tour> getToursByPriceRange(double minPrice, double maxPrice) {
+        return tourRepository.findByPriceBetween(minPrice, maxPrice);
+    }
+
+    public List<Tour> searchTour(String keyword) {
+        return tourRepository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(keyword, keyword);
     }
 
 

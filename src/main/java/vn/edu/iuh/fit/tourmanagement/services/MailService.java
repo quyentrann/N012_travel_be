@@ -71,6 +71,33 @@ public class MailService {
         mailSender.send(message);
     }
 
+    public void sendCancellationConfirmationEmail(String toEmail, String customerName, String tourName,
+                                                  String reason, double cancellationFee, double refundAmount)
+            throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
+        helper.setSubject("Xác nhận hủy tour");
+
+        String emailContent = String.format(
+                "Chào %s,\n\n"
+                        + "Yêu cầu hủy tour của bạn đã được xử lý. Dưới đây là thông tin chi tiết:\n\n"
+                        + "Tên tour: %s\n"
+                        + "Lý do hủy: %s\n"
+                        + "Phí hủy: %,d VNĐ\n"
+                        + "Số tiền hoàn lại: %,d VNĐ\n\n"
+                        + "Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi.\n\n"
+                        + "Trân trọng,\n"
+                        + "Đội ngũ hỗ trợ Tour Management.",
+                customerName, tourName, reason, (long) cancellationFee, (long) refundAmount
+        );
+
+        helper.setText(emailContent);
+        mailSender.send(message);
+        System.out.println("Email xác nhận hủy tour đã được gửi tới: " + toEmail);
+    }
 
     // Sinh OTP ngẫu nhiên
     private String generateOtp() {
@@ -82,25 +109,25 @@ public class MailService {
     // Kiểm tra OTP khi người dùng nhập
     public boolean verifyOtp(String email, String otp) {
         OtpInfo otpInfo = otpStore.get(email);
-
+        System.out.println("Verifying OTP for email: " + email);
         System.out.println("User input OTP: " + otp);
         System.out.println("Stored OTP: " + (otpInfo != null ? otpInfo.getOtp() : "NULL"));
         System.out.println("Stored Expiry Time: " + (otpInfo != null ? otpInfo.getExpiryTime() : "NULL"));
+        System.out.println("Current Time: " + System.currentTimeMillis());
 
         if (otpInfo == null) {
-            return false; // Không tìm thấy OTP
+            System.out.println("No OTP found for email: " + email);
+            return false;
         }
-
         if (!otpInfo.getOtp().equals(otp)) {
             System.out.println("OTP does not match.");
             return false;
         }
-
         if (otpInfo.getExpiryTime() <= System.currentTimeMillis()) {
             System.out.println("OTP expired.");
             return false;
         }
-
+        System.out.println("OTP verified successfully.");
         return true;
     }
 
@@ -127,8 +154,27 @@ public class MailService {
             return expiryTime;
         }
     }
-  
-public void sendBookingConfirmationEmail(String toEmail, String customerName, String tourName,
+
+    // Kiểm tra xem OTP có còn hiệu lực không
+    public boolean isOtpValid(String email) {
+        OtpInfo otpInfo = otpStore.get(email);
+        if (otpInfo == null) {
+            return false; // Nếu không có OTP thì không hợp lệ
+        }
+
+        // Nếu OTP còn hiệu lực, trả về true
+        if (otpInfo.getExpiryTime() > System.currentTimeMillis()) {
+            return true;
+        }
+
+        // Nếu OTP đã hết hạn, xóa OTP cũ và trả về false
+        otpStore.remove(email);
+        return false;
+    }
+
+
+
+    public void sendBookingConfirmationEmail(String toEmail, String customerName, String tourName,
                                              String departureLocation, String departureDate, int numberPeople,
                                              double totalPrice, String paymentDeadline) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
