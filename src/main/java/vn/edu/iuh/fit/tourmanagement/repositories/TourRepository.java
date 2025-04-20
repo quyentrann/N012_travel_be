@@ -76,4 +76,10 @@ public interface TourRepository extends JpaRepository<Tour, Long>, JpaSpecificat
 @Query("SELECT t FROM Tour t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
 List<Tour> searchByKeyword(@Param("keyword") String keyword);
 
+    List<Tour> findByTourcategory_CategoryId(Long categoryId);
+    // Lọc tour theo giá trong khoảng minPrice và maxPrice
+    List<Tour> findByPriceBetween(double minPrice, double maxPrice);
+
+    List<Tour> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String desc);
+    List<Tour> findByLocationContainingIgnoreCase(String query);
 }

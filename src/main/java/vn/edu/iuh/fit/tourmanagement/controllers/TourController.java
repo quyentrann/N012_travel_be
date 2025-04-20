@@ -1,5 +1,6 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -19,10 +20,7 @@ import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
 import java.time.LocalDate;
-import java.util.Collections;
-import java.util.List;
-
-import java.util.Optional;
+import java.util.*;
 
 import java.util.stream.Collectors;
 
@@ -48,51 +46,64 @@ public class TourController {
         }
 
         List<TourDTO> tourDTOs = tours.stream()
-                .map(tour -> new TourDTO(
-                        tour.getTourId(),
-                        tour.getName(),
-                        tour.getPrice(),
-                        tour.getAvailableSlot(),
-                        tour.getLocation(),
-                        tour.getDescription(),
-                        tour.getHighlights(),  // Thêm highlights
-                        tour.getImageURL(),  // Thêm imageURL
-                        tour.getExperiences(),  // Thêm experiences
-                        tour.getStatus().name(),  // Thêm status
-                        new TourCategoryDTO(
-                                tour.getTourcategory().getCategoryId(),
-                                tour.getTourcategory().getCategoryName(),
-                                tour.getTourcategory().getDescription()
-                        ),  // Thêm tour category
-                        tour.getTourDetails().stream()
-                                .map(detail -> new TourDetailDTO(
-                                        detail.getDetailId(),
-                                        detail.getStartDate(),
-                                        detail.getEndDate(),
-                                        detail.getIncludedServices(),
-                                        detail.getExcludedServices()
-                                ))
-                                .collect(Collectors.toList()),
-                        tour.getTourSchedules().stream()
-                                .map(schedule -> new TourScheduleDTO(
-                                        schedule.getScheduleId(),
-                                        schedule.getDayNumber(),
-                                        schedule.getLocation(),
-                                        schedule.getStransport(),
-                                        schedule.getActivities()
-                                ))
-                                .collect(Collectors.toList()),
-                        tour.getReviews().stream()
-                                .map(review -> new ReviewDTO(
-                                        review.getReviewId(),
-                                        review.getComment(),
-                                        review.getRating(),
-                                        review.getReviewDate(),
-                                        review.getCustomer() != null ? review.getCustomer().getFullName() : null,
-                                        review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
-                                ))
-                                .collect(Collectors.toList())
-                ))
+                .map(tour -> {
+                    // Fetch bookings
+                    Hibernate.initialize(tour.getBookings());
+                    return new TourDTO(
+                            tour.getTourId(),
+                            tour.getName(),
+                            tour.getPrice(),
+                            tour.getAvailableSlot(),
+                            tour.getLocation(),
+                            tour.getDescription(),
+                            tour.getHighlights(),
+                            tour.getImageURL(),
+                            tour.getExperiences(),
+                            tour.getStatus().name(),
+                            new TourCategoryDTO(
+                                    tour.getTourcategory().getCategoryId(),
+                                    tour.getTourcategory().getCategoryName(),
+                                    tour.getTourcategory().getDescription()
+                            ),
+                            tour.getTourDetails().stream()
+                                    .map(detail -> new TourDetailDTO(
+                                            detail.getDetailId(),
+                                            detail.getStartDate(),
+                                            detail.getEndDate(),
+                                            detail.getIncludedServices(),
+                                            detail.getExcludedServices()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getTourSchedules().stream()
+                                    .map(schedule -> new TourScheduleDTO(
+                                            schedule.getScheduleId(),
+                                            schedule.getDayNumber(),
+                                            schedule.getLocation(),
+                                            schedule.getStransport(),
+                                            schedule.getActivities()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getReviews().stream()
+                                    .map(review -> new ReviewDTO(
+                                            review.getReviewId(),
+                                            review.getComment(),
+                                            review.getRating(),
+                                            review.getReviewDate(),
+                                            review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                            review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getBookings().stream()
+                                    .map(booking -> new BookingDTO(
+                                            booking.getBookingId(),
+                                            booking.getNumberPeople(),
+                                            booking.getTotalPrice(),
+                                            booking.getBookingDate(),
+                                            booking.getStatus().name()
+                                    ))
+                                    .collect(Collectors.toList())
+                    );
+                })
                 .collect(Collectors.toList());
 
         return new ResponseEntity<>(tourDTOs, HttpStatus.OK);
@@ -107,6 +118,9 @@ public class TourController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
 
+        // Fetch bookings
+        Hibernate.initialize(tour.getBookings());
+
         TourDTO tourDTO = new TourDTO(
                 tour.getTourId(),
                 tour.getName(),
@@ -114,10 +128,10 @@ public class TourController {
                 tour.getAvailableSlot(),
                 tour.getLocation(),
                 tour.getDescription(),
-                tour.getHighlights(),  // Thêm highlights
-                tour.getImageURL(),  // Thêm imageURL
+                tour.getHighlights(),
+                tour.getImageURL(),
                 tour.getExperiences(),
-                tour.getStatus().name(),  // Thêm status
+                tour.getStatus().name(),
                 new TourCategoryDTO(
                         tour.getTourcategory().getCategoryId(),
                         tour.getTourcategory().getCategoryName(),
@@ -150,6 +164,15 @@ public class TourController {
                                 review.getCustomer() != null ? review.getCustomer().getFullName() : null,
                                 review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
                         ))
+                        .collect(Collectors.toList()),
+                tour.getBookings().stream()
+                        .map(booking -> new BookingDTO(
+                                booking.getBookingId(),
+                                booking.getNumberPeople(),
+                                booking.getTotalPrice(),
+                                booking.getBookingDate(),
+                                booking.getStatus().name()
+                        ))
                         .collect(Collectors.toList())
         );
 
@@ -158,66 +181,74 @@ public class TourController {
 
     @GetMapping("/{tourId}/similar")
     public ResponseEntity<List<TourDTO>> getSimilarTours(@PathVariable Long tourId) {
-        // Lấy danh sách tour tương tự từ service
         List<Tour> similarTours = tourService.getSimilarTours(tourId);
-
-        // Kiểm tra xem danh sách có rỗng không
         if (similarTours.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).body(Collections.emptyList());
         }
 
-        // Chuyển đổi từ Tour thành TourDTO
         List<TourDTO> tourDTOs = similarTours.stream()
-                .map(tour -> new TourDTO(
-                        tour.getTourId(),
-                        tour.getName(),
-                        tour.getPrice(),
-                        tour.getAvailableSlot(),
-                        tour.getLocation(),
-                        tour.getDescription(),
-                        tour.getHighlights(),
-                        tour.getImageURL(),
-                        tour.getExperiences(),
-                        tour.getStatus().name(),
-                        new TourCategoryDTO(
-                                tour.getTourcategory().getCategoryId(),
-                                tour.getTourcategory().getCategoryName(),
-                                tour.getTourcategory().getDescription()
-                        ),
-                        tour.getTourDetails().stream()
-                                .map(detail -> new TourDetailDTO(
-                                        detail.getDetailId(),
-                                        detail.getStartDate(),
-                                        detail.getEndDate(),
-                                        detail.getIncludedServices(),
-                                        detail.getExcludedServices()
-                                ))
-                                .collect(Collectors.toList()),
-                        tour.getTourSchedules().stream()
-                                .map(schedule -> new TourScheduleDTO(
-                                        schedule.getScheduleId(),
-                                        schedule.getDayNumber(),
-                                        schedule.getLocation(),
-                                        schedule.getStransport(),
-                                        schedule.getActivities()
-                                ))
-                                .collect(Collectors.toList()),
-                        tour.getReviews().stream()
-                                .map(review -> new ReviewDTO(
-                                        review.getReviewId(),
-                                        review.getComment(),
-                                        review.getRating(),
-                                        review.getReviewDate(),
-                                        review.getCustomer() != null ? review.getCustomer().getFullName() : null,
-                                        review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
-                                ))
-                                .collect(Collectors.toList())
-                ))
+                .map(tour -> {
+                    // Fetch bookings
+                    Hibernate.initialize(tour.getBookings());
+                    return new TourDTO(
+                            tour.getTourId(),
+                            tour.getName(),
+                            tour.getPrice(),
+                            tour.getAvailableSlot(),
+                            tour.getLocation(),
+                            tour.getDescription(),
+                            tour.getHighlights(),
+                            tour.getImageURL(),
+                            tour.getExperiences(),
+                            tour.getStatus().name(),
+                            new TourCategoryDTO(
+                                    tour.getTourcategory().getCategoryId(),
+                                    tour.getTourcategory().getCategoryName(),
+                                    tour.getTourcategory().getDescription()
+                            ),
+                            tour.getTourDetails().stream()
+                                    .map(detail -> new TourDetailDTO(
+                                            detail.getDetailId(),
+                                            detail.getStartDate(),
+                                            detail.getEndDate(),
+                                            detail.getIncludedServices(),
+                                            detail.getExcludedServices()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getTourSchedules().stream()
+                                    .map(schedule -> new TourScheduleDTO(
+                                            schedule.getScheduleId(),
+                                            schedule.getDayNumber(),
+                                            schedule.getLocation(),
+                                            schedule.getStransport(),
+                                            schedule.getActivities()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getReviews().stream()
+                                    .map(review -> new ReviewDTO(
+                                            review.getReviewId(),
+                                            review.getComment(),
+                                            review.getRating(),
+                                            review.getReviewDate(),
+                                            review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                            review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getBookings().stream()
+                                    .map(booking -> new BookingDTO(
+                                            booking.getBookingId(),
+                                            booking.getNumberPeople(),
+                                            booking.getTotalPrice(),
+                                            booking.getBookingDate(),
+                                            booking.getStatus().name()
+                                    ))
+                                    .collect(Collectors.toList())
+                    );
+                })
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(tourDTOs);
     }
-
 
 
 
@@ -318,6 +349,85 @@ public class TourController {
     public ResponseEntity<List<Tour>> search(@RequestParam String keyword) {
         List<Tour> tours = tourService.searchTours(keyword);
         return ResponseEntity.ok(tours);
+    }
+
+    // API lấy danh sách tour theo loại
+    @GetMapping("/category/{categoryId}")
+    public ResponseEntity<List<TourDTO>> getToursByCategory(@PathVariable Long categoryId) {
+        List<Tour> tours = tourService.getToursByCategory(categoryId);
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        List<TourDTO> tourDTOs = tours.stream()
+                .map(tour -> {
+                    // Fetch bookings
+                    Hibernate.initialize(tour.getBookings());
+                    return new TourDTO(
+                            tour.getTourId(),
+                            tour.getName(),
+                            tour.getPrice(),
+                            tour.getAvailableSlot(),
+                            tour.getLocation(),
+                            tour.getDescription(),
+                            tour.getHighlights(),
+                            tour.getImageURL(),
+                            tour.getExperiences(),
+                            tour.getStatus().name(),
+                            new TourCategoryDTO(
+                                    tour.getTourcategory().getCategoryId(),
+                                    tour.getTourcategory().getCategoryName(),
+                                    tour.getTourcategory().getDescription()
+                            ),
+                            tour.getTourDetails().stream()
+                                    .map(detail -> new TourDetailDTO(
+                                            detail.getDetailId(),
+                                            detail.getStartDate(),
+                                            detail.getEndDate(),
+                                            detail.getIncludedServices(),
+                                            detail.getExcludedServices()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getTourSchedules().stream()
+                                    .map(schedule -> new TourScheduleDTO(
+                                            schedule.getScheduleId(),
+                                            schedule.getDayNumber(),
+                                            schedule.getLocation(),
+                                            schedule.getStransport(),
+                                            schedule.getActivities()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getReviews().stream()
+                                    .map(review -> new ReviewDTO(
+                                            review.getReviewId(),
+                                            review.getComment(),
+                                            review.getRating(),
+                                            review.getReviewDate(),
+                                            review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                            review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getBookings().stream()
+                                    .map(booking -> new BookingDTO(
+                                            booking.getBookingId(),
+                                            booking.getNumberPeople(),
+                                            booking.getTotalPrice(),
+                                            booking.getBookingDate(),
+                                            booking.getStatus().name()
+                                    ))
+                                    .collect(Collectors.toList())
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(tourDTOs, HttpStatus.OK);
+    }
+
+    @GetMapping("/price-range")
+    public List<Tour> getToursByPriceRange(
+            @RequestParam double minPrice,
+            @RequestParam double maxPrice) {
+        return tourService.getToursByPriceRange(minPrice, maxPrice);
     }
 
 }

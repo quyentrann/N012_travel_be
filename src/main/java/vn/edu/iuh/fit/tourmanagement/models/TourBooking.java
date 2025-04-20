@@ -9,6 +9,7 @@ import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "booking")
@@ -52,7 +53,6 @@ public class TourBooking {
     @ManyToOne
     @JoinColumn(name = "discount_id")
     private Discount discount;
-
 
 
 }

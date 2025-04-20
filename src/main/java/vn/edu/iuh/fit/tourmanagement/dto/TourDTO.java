@@ -20,11 +20,9 @@ public class TourDTO {
     private String imageURL;
     private String experiences;
     private String status;
-    private TourCategoryDTO tourCategory; // Thêm TourCategoryDTO
+    private TourCategoryDTO tourCategory;
     private List<TourDetailDTO> tourDetails;
     private List<TourScheduleDTO> tourSchedules;
     private List<ReviewDTO> reviews;
-    // Add reviews in DTO
-
-    // Constructor, getters, setters
+    private List<BookingDTO> bookings;
 }

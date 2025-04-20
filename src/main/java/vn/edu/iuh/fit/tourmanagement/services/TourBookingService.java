@@ -50,7 +50,8 @@ public class TourBookingService {
     }
 
     public TourBooking getTourBookingById(Long id) {
-        return tourBookingRepository.findById(id).orElse(null);
+        return tourBookingRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking với ID: " + id));
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {
@@ -138,28 +139,34 @@ public class TourBookingService {
 
     //Hủy tour
     @Transactional
-    public CancelResponse cancelBooking(Long bookingId, String reason, LocalDateTime cancelDate, boolean isHoliday) {
+    public CancelResponse cancelBooking(Long bookingId, String reason, LocalDateTime cancelDate, boolean isHoliday, Authentication authentication) {
+        // Kiểm tra quyền
+        User user = (User) authentication.getPrincipal();
         TourBooking booking = tourBookingRepository.findById(bookingId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking"));
+        if (user.getCustomer() == null || !booking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
+            throw new IllegalStateException("Bạn không có quyền hủy booking này.");
+        }
 
-        // Kiểm tra trạng thái của booking, không cho hủy nếu đã hủy, hoàn thành, hoặc đang thực hiện tour
+        // Kiểm tra trạng thái
         if (booking.getStatus() == BookingStatus.CANCELED ||
                 booking.getStatus() == BookingStatus.COMPLETED ||
                 booking.getStatus() == BookingStatus.IN_PROGRESS) {
             throw new IllegalStateException("Không thể hủy booking với trạng thái hiện tại: " + booking.getStatus());
         }
 
-        // Nếu chưa thanh toán, không hoàn tiền khi hủy
+        // Kiểm tra cancelDate
+        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay();
+        if (cancelDate.isAfter(LocalDateTime.now()) || cancelDate.isAfter(tourStartDate)) {
+            throw new IllegalArgumentException("Ngày hủy không hợp lệ. Ngày hủy phải trước thời điểm hiện tại và ngày khởi hành của tour.");
+        }
+
+        // Tính phí hủy
         double cancellationFee = 0;
         double refundAmount = 0;
-
         if (booking.getStatus() == BookingStatus.PAID) {
-            // Nếu đã thanh toán, tính phí hủy và số tiền hoàn lại
             cancellationFee = calculateCancellationFee(booking, cancelDate, isHoliday);
             refundAmount = booking.getTotalPrice() - cancellationFee;
-        } else {
-            // Nếu chưa thanh toán, không hoàn lại tiền
-            refundAmount = 0;
         }
 
         // Lưu lịch sử hủy
@@ -168,23 +175,43 @@ public class TourBookingService {
                 .oldStatus(booking.getStatus())
                 .newStatus(BookingStatus.CANCELED)
                 .changeDate(LocalDateTime.now())
+                .cancelDate(cancelDate)
                 .reason(reason)
                 .cancellationFee(cancellationFee)
-                .refundAmount(refundAmount)  // Lưu số tiền hoàn lại, nếu có
+                .refundAmount(refundAmount)
                 .tour(booking.getTour())
+                .isHoliday(isHoliday)
                 .build();
         bookingHistoryRepository.save(history);
 
-        // Cập nhật trạng thái của booking
+        // Cập nhật trạng thái booking
         booking.setStatus(BookingStatus.CANCELED);
         tourBookingRepository.save(booking);
 
-        // Trả về đối tượng CancelResponse chứa thông tin chi tiết
+        // Cập nhật slot tour
+        Tour tour = booking.getTour();
+        tour.setAvailableSlot(tour.getAvailableSlot() + booking.getNumberPeople());
+        tourRepository.save(tour);
+
+        // Gửi email xác nhận hủy
+        try {
+            mailService.sendCancellationConfirmationEmail(
+                    user.getEmail(),
+                    booking.getCustomer().getFullName(),
+                    tour.getName(),
+                    reason,
+                    cancellationFee,
+                    refundAmount
+            );
+        } catch (Exception e) {
+            System.err.println("Lỗi khi gửi email hủy: " + e.getMessage());
+        }
+
+        // Trả về kết quả
         CancelResponse response = new CancelResponse();
         response.setMessage("Booking đã được hủy thành công!");
         response.setCancellationFee(cancellationFee);
-        response.setRefundAmount(refundAmount);  // Số tiền hoàn lại nếu có
-
+        response.setRefundAmount(refundAmount);
         return response;
     }
 
@@ -194,15 +221,16 @@ public class TourBookingService {
 
     // Hàm tính phí hủy
     private double calculateCancellationFee(TourBooking booking, LocalDateTime cancelDate, boolean isHoliday) {
-        // Lấy ngày khởi hành của tour (ví dụ từ tourDetails)
-        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay(); // Giả sử lấy ngày khởi hành của tour đầu tiên và chuyển về LocalDateTime nếu tourDetail dùng LocalDate
+        // Kiểm tra tourDetails
+        if (booking.getTour().getTourDetails() == null || booking.getTour().getTourDetails().isEmpty()) {
+            throw new IllegalStateException("Tour không có thông tin chi tiết về ngày khởi hành.");
+        }
 
-        // Tính số ngày trước khi tour bắt đầu
+        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay();
         long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(cancelDate, tourStartDate);
 
         double cancellationFee = 0;
         if (isHoliday) {
-            // Phí hủy cho ngày lễ
             if (daysBeforeTour >= 30) {
                 cancellationFee = 0.2 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 15) {
@@ -212,10 +240,9 @@ public class TourBookingService {
             } else if (daysBeforeTour >= 3) {
                 cancellationFee = 0.8 * booking.getTotalPrice();
             } else {
-                cancellationFee = booking.getTotalPrice();  // 100% phí
+                cancellationFee = booking.getTotalPrice();
             }
         } else {
-            // Phí hủy cho ngày thường
             if (daysBeforeTour >= 14) {
                 cancellationFee = 0.1 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 7) {
@@ -225,7 +252,7 @@ public class TourBookingService {
             } else if (daysBeforeTour >= 1) {
                 cancellationFee = 0.7 * booking.getTotalPrice();
             } else {
-                cancellationFee = booking.getTotalPrice();  // 100% phí
+                cancellationFee = booking.getTotalPrice();
             }
         }
 
