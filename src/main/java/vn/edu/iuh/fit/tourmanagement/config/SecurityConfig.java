@@ -81,6 +81,7 @@ public class SecurityConfig {
                                 .requestMatchers("/api/search-history/my-history").authenticated()
                                 .requestMatchers("/api/users/update-profile").authenticated()
                                 .requestMatchers("/api/users/upload-avatar").authenticated()
+                                .requestMatchers("/api/tour-favourites/**").authenticated()
                                 .anyRequest().authenticated()
 
                 )

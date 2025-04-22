@@ -1,6 +1,9 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +36,8 @@ public class UserController {
     @Autowired
     private AuthService authService;
 
-
+    @Autowired
+    private Cloudinary cloudinary;
     // Lấy tất cả người dùng
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
@@ -55,17 +59,25 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<User> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String email = authentication.getName(); // Lấy email từ token
+    public ResponseEntity<User> getCurrentUser(HttpServletResponse response) {
+        try {
+            // Ngăn cache
+            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.setHeader("Pragma", "no-cache");
+            response.setDateHeader("Expires", 0);
 
-        User user = userService.getUserByEmail(email); // Hàm này cần implement
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            User user = userService.getUserByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            System.out.println("User data sent: " + user); // Debug
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        return ResponseEntity.ok(user);
     }
-
     // Tạo người dùng mới
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody User user) {
@@ -93,7 +105,7 @@ public class UserController {
     public ResponseEntity<?> updateProfile(@RequestBody Map<String, Object> updates) {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            String email = authentication.getName(); // Lấy email từ token
+            String email = authentication.getName();
 
             User user = userService.getUserByEmail(email);
             if (user == null) {
@@ -115,12 +127,14 @@ public class UserController {
             if (updates.containsKey("address")) {
                 customer.setAddress((String) updates.get("address"));
             }
-            if (updates.containsKey("dob")) {
+            if (updates.containsKey("dob") && updates.get("dob") != null) {
                 String dobString = (String) updates.get("dob");
-                customer.setDob(LocalDate.parse(dobString)); // Parse chuỗi ngày thành LocalDate
+                if (!dobString.isEmpty()) {
+                    customer.setDob(LocalDate.parse(dobString));
+                }
             }
-            if (updates.containsKey("gender")) {
-                customer.setGender(Boolean.parseBoolean(updates.get("gender").toString())); // Parse gender thành boolean
+            if (updates.containsKey("gender") && updates.get("gender") != null) {
+                customer.setGender(Boolean.parseBoolean(updates.get("gender").toString()));
             }
 
             // Cập nhật email của User (nếu có)
@@ -140,51 +154,36 @@ public class UserController {
     }
 
     @PostMapping("/upload-avatar")
-    public ResponseEntity<?> uploadAvatar(@RequestParam("avatar") MultipartFile file, HttpServletRequest request) {
+    public ResponseEntity<?> uploadAvatar(@RequestParam("avatar") MultipartFile file) {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             String email = authentication.getName();
-
             User user = userService.getUserByEmail(email);
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Không tìm thấy người dùng!");
             }
-
             Customer customer = user.getCustomer();
             if (customer == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Không tìm thấy thông tin khách hàng!");
             }
 
-            // Lưu file ảnh vào server
-            String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-            Path filePath = Paths.get("uploads/avatars/" + fileName);
-            System.out.println("Saving file to: " + filePath.toAbsolutePath());
-            Files.createDirectories(filePath.getParent());
-            Files.write(filePath, file.getBytes());
-            if (!Files.exists(filePath)) {
-                System.err.println("File not created: " + filePath);
-                throw new IOException("Failed to create file");
-            }
+            // Tải lên Cloudinary
+            String fileName = "avatars/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                    "public_id", fileName,
+                    "overwrite", true,
+                    "resource_type", "image"
+            ));
+            String avatarUrl = (String) uploadResult.get("secure_url");
 
-            // Tạo URL tuyệt đối từ request
-            String avatarUrl = ServletUriComponentsBuilder.fromRequestUri(request)
-                    .replacePath("/avatars/" + fileName)
-                    .build()
-                    .toUriString();
-            System.out.println("Generated avatarUrl: " + avatarUrl);
             customer.setAvatarUrl(avatarUrl);
-
             userService.updateUser(user);
 
             Map<String, String> response = new HashMap<>();
             response.put("avatarUrl", avatarUrl);
             return ResponseEntity.ok(response);
-        } catch (IOException e) {
-            System.err.println("Error saving file: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lưu ảnh: " + e.getMessage());
         } catch (Exception e) {
-            System.err.println("Upload error: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tải ảnh thất bại: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Tải ảnh thất bại: " + e.getMessage());
         }
     }
 

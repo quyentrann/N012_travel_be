@@ -2,6 +2,7 @@ package vn.edu.iuh.fit.tourmanagement.dto;
 
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -14,6 +15,7 @@ public class TourBookingDTO {
     private Integer numberPeople;
     private Double totalPrice;
     private LocalDateTime bookingDate;
+    private LocalDate departureDate;
     private String status;
     private TourDTO tour; // Thêm TourDTO
 }
