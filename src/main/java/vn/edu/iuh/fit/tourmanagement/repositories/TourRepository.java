@@ -50,29 +50,6 @@ public interface TourRepository extends JpaRepository<Tour, Long>, JpaSpecificat
             @Param("location") String location
     );
 
-//    // Ví dụ tìm tour theo giá
-//    List<Tour> findByPriceLessThanEqual(Double price);
-//
-//    // Tìm tour theo địa điểm
-//    List<Tour> findByLocationContaining(String location);
-//
-//    // Tìm tour phổ biến (giả sử tour phổ biến có rating > 4.0)
-//    @Query("SELECT t FROM Tour t JOIN t.reviews r WHERE r.rating > 4.0")
-//    List<Tour> findPopularTours();
-//
-//    // Tìm tour theo ngày khởi hành và tính toán duration từ TourDetail
-//    @Query("SELECT t FROM Tour t JOIN t.tourDetails td " +
-//            "WHERE td.startDate >= :startDate " +
-//            "AND (DATEDIFF(td.endDate, td.startDate) + 1) <= :duration")  // Calculate duration dynamically
-//    List<Tour> findByStartDateGreaterThanEqualAndDurationLessThanEqual(
-//            @Param("startDate") LocalDate startDate,
-//            @Param("duration") Integer duration);
-//
-//    // Tìm tour theo số lượng chỗ còn lại
-//    List<Tour> findByAvailableSlotGreaterThanEqual(Integer availableSlots);
-//
-//    // Tìm tour theo loại trải nghiệm
-//    List<Tour> findByExperiencesContaining(String experienceType);
 @Query("SELECT t FROM Tour t WHERE LOWER(t.name) LIKE LOWER(CONCAT('%', :keyword, '%'))")
 List<Tour> searchByKeyword(@Param("keyword") String keyword);
 
@@ -82,4 +59,14 @@ List<Tour> searchByKeyword(@Param("keyword") String keyword);
 
     List<Tour> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String desc);
     List<Tour> findByLocationContainingIgnoreCase(String query);
+
+    @Query("SELECT t FROM Tour t JOIN t.tourDetails td WHERE (td.startDate BETWEEN :startDate AND :endDate) OR (td.endDate BETWEEN :startDate AND :endDate)")
+    List<Tour> findToursByTimeRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    public List<Tour> findByTourDetailsStartDateOrTourDetailsEndDate(LocalDate startDate, LocalDate endDate);
+
+
+    public List<Tour> findByTourDetailsStartDateBetweenOrTourDetailsEndDateBetween(LocalDate startDate1, LocalDate endDate1, LocalDate startDate2, LocalDate endDate2);
+
+
 }

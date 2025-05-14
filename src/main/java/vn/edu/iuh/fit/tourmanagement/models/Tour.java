@@ -71,5 +71,7 @@ public class Tour {
     @JsonManagedReference
     private List<TourBooking> bookings;
 
+
+
 }
 

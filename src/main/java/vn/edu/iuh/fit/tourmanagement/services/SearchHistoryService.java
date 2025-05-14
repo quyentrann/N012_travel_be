@@ -3,6 +3,7 @@ package vn.edu.iuh.fit.tourmanagement.services;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
 import vn.edu.iuh.fit.tourmanagement.enums.UserStatus;
 import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
@@ -10,25 +11,34 @@ import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.SearchHistoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class SearchHistoryService {
 
     private static final Logger logger = Logger.getLogger(SearchHistoryService.class.getName());
     private static final int MAX_SEARCH_HISTORY = 10;
+    private static final int MAX_TOURS_PER_QUERY = 3;
 
     private final SearchHistoryRepository searchHistoryRepository;
     private final TourRepository tourRepository;
+    private final TourService tourService;
 
-    public SearchHistoryService(SearchHistoryRepository searchHistoryRepository, TourRepository tourRepository) {
+    public SearchHistoryService(
+            SearchHistoryRepository searchHistoryRepository,
+            TourRepository tourRepository,
+            TourService tourService) {
         this.searchHistoryRepository = searchHistoryRepository;
         this.tourRepository = tourRepository;
+        this.tourService = tourService;
     }
 
     @Transactional
@@ -53,23 +63,26 @@ public class SearchHistoryService {
         try {
             // Đếm số bản ghi hiện tại
             long currentCount = searchHistoryRepository.countByUser(user);
-            if (currentCount >= MAX_SEARCH_HISTORY) {
-                // Lấy ID của các bản ghi cũ nhất để xóa
-                List<Long> toDeleteIds = searchHistoryRepository.findTopByUserOrderBySearchTimeAsc(user, PageRequest.of(0, (int) (currentCount - MAX_SEARCH_HISTORY + 1)))
-                        .stream()
-                        .map(SearchHistory::getId)
-                        .collect(Collectors.toList());
-                if (!toDeleteIds.isEmpty()) {
-                    searchHistoryRepository.deleteAllById(toDeleteIds);
-                    logger.info("Deleted " + toDeleteIds.size() + " old search history records for user ID: " + user.getId());
-                }
-            }
+            logger.info("Current search history count for user ID " + user.getId() + ": " + currentCount);
 
-            // Kiểm tra và lấy tour hợp lệ
-            Tour matchedTour = searchResults.get(0);
-            if (matchedTour.getTourId() == null || !tourRepository.existsById(matchedTour.getTourId())) {
-                logger.warning("Invalid tour ID: " + (matchedTour.getTourId() != null ? matchedTour.getTourId() : "null") + ", skipping save search history");
-                return;
+            // Chỉ lưu 1 bản ghi với searchQuery (không lưu tour)
+            if (currentCount >= MAX_SEARCH_HISTORY) {
+                int recordsToDelete = (int) (currentCount - MAX_SEARCH_HISTORY + 1);
+                logger.info("Need to delete " + recordsToDelete + " old records");
+
+                List<SearchHistory> oldRecords = searchHistoryRepository.findByUser(user)
+                        .stream()
+                        .sorted(Comparator.comparing(SearchHistory::getSearchTime))
+                        .limit(recordsToDelete)
+                        .collect(Collectors.toList());
+
+                if (!oldRecords.isEmpty()) {
+                    logger.info("Deleting old search history records: " + oldRecords.size());
+                    searchHistoryRepository.deleteAll(oldRecords);
+                    searchHistoryRepository.flush();
+                    long countAfterDelete = searchHistoryRepository.countByUser(user);
+                    logger.info("After deletion, new count for user ID " + user.getId() + ": " + countAfterDelete);
+                }
             }
 
             // Cắt ngắn query nếu quá dài
@@ -79,19 +92,96 @@ public class SearchHistoryService {
                 logger.info("Truncated search query to 255 characters: " + trimmedQuery);
             }
 
+            // Lưu bản ghi chỉ với searchQuery
             SearchHistory searchHistory = SearchHistory.builder()
                     .user(user)
                     .searchQuery(trimmedQuery)
-                    .tour(matchedTour)
+                    .tour(null) // Không lưu tour
                     .searchTime(LocalDateTime.now())
                     .clickCount(0)
                     .build();
             searchHistoryRepository.save(searchHistory);
-            logger.info("Saved search history for user ID: " + user.getId() + ", query: " + trimmedQuery +
-                    ", tour ID: " + matchedTour.getTourId());
+            logger.info("Saved search history for user ID: " + user.getId() + ", query: " + trimmedQuery);
+
+            long finalCount = searchHistoryRepository.countByUser(user);
+            logger.info("Final search history count for user ID " + user.getId() + ": " + finalCount);
         } catch (Exception e) {
             logger.severe("Error saving search history for user ID: " + user.getId() + ": " + e.getMessage());
             throw new RuntimeException("Failed to save search history: " + e.getMessage(), e);
+        }
+    }
+
+    public List<Tour> getRecommendedToursFromHistory(User user) {
+        if (user == null || user.getId() == null) {
+            logger.warning("User is null or has no ID, returning empty list");
+            return List.of();
+        }
+        try {
+            // Lấy tất cả search_history của user
+            List<SearchHistory> histories = searchHistoryRepository.findByUser(user)
+                    .stream()
+                    .sorted(Comparator
+                            .comparingInt(SearchHistory::getClickCount).reversed()
+                            .thenComparing(SearchHistory::getSearchTime, Comparator.reverseOrder()))
+                    .limit(MAX_SEARCH_HISTORY)
+                    .collect(Collectors.toList());
+
+            logger.info("Found " + histories.size() + " search history records for user ID " + user.getId());
+
+            // Lấy tour từ search_query, tối đa 3 tour mỗi query
+            List<Tour> queryTours = histories.stream()
+                    .filter(sh -> sh.getSearchQuery() != null)
+                    .map(SearchHistory::getSearchQuery)
+                    .distinct()
+                    .flatMap(query -> {
+                        logger.info("Fetching tours for query: " + query);
+                        return tourService.searchTours(query).stream()
+                                .filter(tour -> tour.getStatus() == TourStatus.ACTIVE &&
+                                        tour.getAvailableSlot() > 0 &&
+                                        tour.getTourDetails().stream().anyMatch(detail ->
+                                                !detail.getStartDate().isBefore(LocalDate.now())))
+                                .limit(MAX_TOURS_PER_QUERY); // Giới hạn 3 tour mỗi query
+                    })
+                    .collect(Collectors.toList());
+
+            logger.info("Found " + queryTours.size() + " tours from search queries");
+
+            // Lấy tour từ click (search_query = null, tour != null, click_count > 0)
+            List<Tour> clickTours = histories.stream()
+                    .filter(sh -> sh.getSearchQuery() == null && sh.getTour() != null && sh.getClickCount() > 0)
+                    .map(SearchHistory::getTour)
+                    .filter(tour -> tour.getStatus() == TourStatus.ACTIVE &&
+                            tour.getAvailableSlot() > 0 &&
+                            tour.getTourDetails().stream().anyMatch(detail ->
+                                    !detail.getStartDate().isBefore(LocalDate.now())))
+                    .collect(Collectors.toList());
+
+            logger.info("Found " + clickTours.size() + " tours from clicks");
+
+            // Tính tổng click_count cho mỗi tour
+            Map<Long, Integer> tourClickCounts = histories.stream()
+                    .filter(sh -> sh.getTour() != null)
+                    .collect(Collectors.groupingBy(
+                            sh -> sh.getTour().getTourId(),
+                            Collectors.summingInt(SearchHistory::getClickCount)
+                    ));
+
+            // Hợp danh sách và sắp xếp theo click_count
+            List<Tour> recommendedTours = Stream.concat(clickTours.stream(), queryTours.stream())
+                    .distinct()
+                    .sorted((t1, t2) -> {
+                        int clicks1 = tourClickCounts.getOrDefault(t1.getTourId(), 0);
+                        int clicks2 = tourClickCounts.getOrDefault(t2.getTourId(), 0);
+                        return Integer.compare(clicks2, clicks1); // Tour có click_count cao xếp trước
+                    })
+                    .collect(Collectors.toList());
+
+            logger.info("Returning " + recommendedTours.size() + " recommended tours for user ID " + user.getId());
+            recommendedTours.forEach(tour -> logger.info("Recommended tour ID: " + tour.getTourId() + ", Name: " + tour.getName()));
+            return recommendedTours;
+        } catch (Exception e) {
+            logger.severe("Error retrieving recommended tours for user ID: " + user.getId() + ": " + e.getMessage());
+            return List.of();
         }
     }
 

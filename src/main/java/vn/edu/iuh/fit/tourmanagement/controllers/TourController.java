@@ -19,6 +19,7 @@ import vn.edu.iuh.fit.tourmanagement.dto.*;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -424,10 +425,293 @@ public class TourController {
     }
 
     @GetMapping("/price-range")
-    public List<Tour> getToursByPriceRange(
+    public ResponseEntity<List<TourDTO>> getToursByPriceRange(
             @RequestParam double minPrice,
             @RequestParam double maxPrice) {
-        return tourService.getToursByPriceRange(minPrice, maxPrice);
+        List<Tour> tours = tourService.getToursByPriceRange(minPrice, maxPrice);
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        List<TourDTO> tourDTOs = tours.stream()
+                .map(tour -> {
+                    // Fetch bookings
+                    Hibernate.initialize(tour.getBookings());
+                    return new TourDTO(
+                            tour.getTourId(),
+                            tour.getName(),
+                            tour.getPrice(),
+                            tour.getAvailableSlot(),
+                            tour.getLocation(),
+                            tour.getDescription(),
+                            tour.getHighlights(),
+                            tour.getImageURL(),
+                            tour.getExperiences(),
+                            tour.getStatus().name(),
+                            new TourCategoryDTO(
+                                    tour.getTourcategory().getCategoryId(),
+                                    tour.getTourcategory().getCategoryName(),
+                                    tour.getTourcategory().getDescription()
+                            ),
+                            tour.getTourDetails().stream()
+                                    .map(detail -> new TourDetailDTO(
+                                            detail.getDetailId(),
+                                            detail.getStartDate(),
+                                            detail.getEndDate(),
+                                            detail.getIncludedServices(),
+                                            detail.getExcludedServices()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getTourSchedules().stream()
+                                    .map(schedule -> new TourScheduleDTO(
+                                            schedule.getScheduleId(),
+                                            schedule.getDayNumber(),
+                                            schedule.getLocation(),
+                                            schedule.getStransport(),
+                                            schedule.getActivities()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getReviews().stream()
+                                    .map(review -> new ReviewDTO(
+                                            review.getReviewId(),
+                                            review.getComment(),
+                                            review.getRating(),
+                                            review.getReviewDate(),
+                                            review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                            review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getBookings().stream()
+                                    .map(booking -> new BookingDTO(
+                                            booking.getBookingId(),
+                                            booking.getNumberPeople(),
+                                            booking.getTotalPrice(),
+                                            booking.getBookingDate(),
+                                            booking.getStatus().name()
+                                    ))
+                                    .collect(Collectors.toList())
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(tourDTOs, HttpStatus.OK);
     }
+
+    @GetMapping("/by-date-range")
+    public ResponseEntity<List<Tour>> getToursByDateRange(
+            @RequestParam(value = "startDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(value = "endDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+        // Kiểm tra nếu không có startDate hoặc endDate thì có thể gọi phương thức khác trong service để lấy tất cả các tour
+        List<Tour> tours = tourService.getToursByDateRange(startDate, endDate);
+
+        // Nếu không có tour nào, trả về mã lỗi 204 (No Content)
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        return ResponseEntity.ok(tours);
+    }
+
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<TourDTO>> filterToursByTime(
+            @RequestParam(value = "time", required = false) String time) {
+
+        LocalDate startDate = null;
+        LocalDate endDate = null;
+
+        switch (time.toLowerCase()) {
+            case "today":
+                startDate = LocalDate.now();
+                endDate = startDate;
+                break;
+            case "this-week":
+                startDate = LocalDate.now().with(DayOfWeek.MONDAY);  // Thứ Hai đầu tuần
+                endDate = LocalDate.now().with(DayOfWeek.SUNDAY);   // Chủ Nhật cuối tuần
+                break;
+            case "this-month":
+                startDate = LocalDate.now().withDayOfMonth(1);  // Ngày đầu tháng
+                endDate = LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth());  // Ngày cuối tháng
+                break;
+            case "next-month":
+                startDate = LocalDate.now().plusMonths(1).withDayOfMonth(1);  // Ngày đầu tháng sau
+                endDate = startDate.withDayOfMonth(startDate.lengthOfMonth()); // Ngày cuối tháng sau
+                break;
+            default:
+                return new ResponseEntity<>(HttpStatus.BAD_REQUEST);  // Nếu tham số không hợp lệ
+        }
+
+        // Lọc các tour theo ngày đã tính toán
+        List<Tour> tours = tourService.filterToursByTime(startDate, endDate);
+
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        List<TourDTO> filteredTourDTOs = tours.stream()
+                .map(tour -> {
+                    Hibernate.initialize(tour.getBookings());
+                    return new TourDTO(
+                            tour.getTourId(),
+                            tour.getName(),
+                            tour.getPrice(),
+                            tour.getAvailableSlot(),
+                            tour.getLocation(),
+                            tour.getDescription(),
+                            tour.getHighlights(),
+                            tour.getImageURL(),
+                            tour.getExperiences(),
+                            tour.getStatus().name(),
+                            new TourCategoryDTO(
+                                    tour.getTourcategory().getCategoryId(),
+                                    tour.getTourcategory().getCategoryName(),
+                                    tour.getTourcategory().getDescription()
+                            ),
+                            tour.getTourDetails().stream()
+                                    .map(detail -> new TourDetailDTO(
+                                            detail.getDetailId(),
+                                            detail.getStartDate(),
+                                            detail.getEndDate(),
+                                            detail.getIncludedServices(),
+                                            detail.getExcludedServices()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getTourSchedules().stream()
+                                    .map(schedule -> new TourScheduleDTO(
+                                            schedule.getScheduleId(),
+                                            schedule.getDayNumber(),
+                                            schedule.getLocation(),
+                                            schedule.getStransport(),
+                                            schedule.getActivities()
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getReviews().stream()
+                                    .map(review -> new ReviewDTO(
+                                            review.getReviewId(),
+                                            review.getComment(),
+                                            review.getRating(),
+                                            review.getReviewDate(),
+                                            review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                            review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                                    ))
+                                    .collect(Collectors.toList()),
+                            tour.getBookings().stream()
+                                    .map(booking -> new BookingDTO(
+                                            booking.getBookingId(),
+                                            booking.getNumberPeople(),
+                                            booking.getTotalPrice(),
+                                            booking.getBookingDate(),
+                                            booking.getStatus().name()
+                                    ))
+                                    .collect(Collectors.toList())
+                    );
+                })
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(filteredTourDTOs, HttpStatus.OK);
+    }
+
+    private TourDTO mapTourToDTO(Tour tour) {
+        return new TourDTO(
+                tour.getTourId(),
+                tour.getName(),
+                tour.getPrice(),
+                tour.getAvailableSlot(),
+                tour.getLocation(),
+                tour.getDescription(),
+                tour.getHighlights(),
+                tour.getImageURL(),
+                tour.getExperiences(),
+                tour.getStatus().name(),
+                new TourCategoryDTO(
+                        tour.getTourcategory().getCategoryId(),
+                        tour.getTourcategory().getCategoryName(),
+                        tour.getTourcategory().getDescription()
+                ),
+                tour.getTourDetails().stream()
+                        .map(detail -> new TourDetailDTO(
+                                detail.getDetailId(),
+                                detail.getStartDate(),
+                                detail.getEndDate(),
+                                detail.getIncludedServices(),
+                                detail.getExcludedServices()
+                        ))
+                        .collect(Collectors.toList()),
+                tour.getTourSchedules().stream()
+                        .map(schedule -> new TourScheduleDTO(
+                                schedule.getScheduleId(),
+                                schedule.getDayNumber(),
+                                schedule.getLocation(),
+                                schedule.getStransport(),
+                                schedule.getActivities()
+                        ))
+                        .collect(Collectors.toList()),
+                tour.getReviews().stream()
+                        .map(review -> new ReviewDTO(
+                                review.getReviewId(),
+                                review.getComment(),
+                                review.getRating(),
+                                review.getReviewDate(),
+                                review.getCustomer() != null ? review.getCustomer().getFullName() : null,
+                                review.getCustomer() != null ? review.getCustomer().getAvatarUrl() : null
+                        ))
+                        .collect(Collectors.toList()),
+                tour.getBookings().stream()
+                        .map(booking -> new BookingDTO(
+                                booking.getBookingId(),
+                                booking.getNumberPeople(),
+                                booking.getTotalPrice(),
+                                booking.getBookingDate(),
+                                booking.getStatus().name()
+                        ))
+                        .collect(Collectors.toList())
+        );
+    }
+
+    @GetMapping("/filter-by-date")
+    public ResponseEntity<List<TourDTO>> filterToursByDate(
+            @RequestParam(value = "date", required = true) String date) {
+
+        LocalDate filterDate = LocalDate.parse(date);  // Parse ngày từ tham số vào
+
+        // Lọc các tour có ngày bắt đầu hoặc ngày kết thúc trùng với filterDate
+        List<Tour> tours = tourService.filterToursByDate(filterDate);
+
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        List<TourDTO> filteredTourDTOs = tours.stream()
+                .map(tour -> mapTourToDTO(tour))
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(filteredTourDTOs, HttpStatus.OK);
+    }
+
+
+    @GetMapping("/filter-by-month")
+    public ResponseEntity<List<TourDTO>> filterToursByMonth(
+            @RequestParam(value = "month", required = true) int month,
+            @RequestParam(value = "year", required = true) int year) {
+
+        LocalDate startOfMonth = LocalDate.of(year, month, 1);  // Ngày đầu tháng
+        LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());  // Ngày cuối tháng
+
+        // Lọc các tour có ngày bắt đầu hoặc kết thúc trong tháng cụ thể
+        List<Tour> tours = tourService.filterToursByMonth(startOfMonth, endOfMonth);
+
+        if (tours.isEmpty()) {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
+
+        List<TourDTO> filteredTourDTOs = tours.stream()
+                .map(tour -> mapTourToDTO(tour))
+                .collect(Collectors.toList());
+
+        return new ResponseEntity<>(filteredTourDTOs, HttpStatus.OK);
+    }
+
+
 
 }

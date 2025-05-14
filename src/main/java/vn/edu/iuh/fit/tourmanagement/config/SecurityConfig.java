@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(request -> {
                     CorsConfiguration config = new CorsConfiguration();
 
-                    config.setAllowedOrigins(List.of("http://localhost:3000","http://localhost:5173", "http://52.77.233.97", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio"));
+                    config.setAllowedOrigins(List.of("http://localhost:3000","http://localhost:5173", "http://18.138.107.49", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio"));
                     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS","HEAD"));
 
                     config.setAllowedHeaders(List.of("*"));
@@ -60,16 +60,16 @@ public class SecurityConfig {
                                 .requestMatchers("/avatars/**").permitAll()
                                 .requestMatchers("/api/user/**").permitAll()
                                 .requestMatchers("/api/tours/**").permitAll()
-                                .requestMatchers("api/customers/**").permitAll()
+                                .requestMatchers("/api/customers/**").permitAll()
                                 .requestMatchers("/api/bookings/**").authenticated()
-                                .requestMatchers("api/tour-details/**").permitAll()
-                                .requestMatchers("api/discounts/**").permitAll()
-                                .requestMatchers("api/employees/**").permitAll()
+                                .requestMatchers("/api/tour-details/**").permitAll()
+                                .requestMatchers("/api/discounts/**").permitAll()
+                                .requestMatchers("/api/employees/**").permitAll()
                                 .requestMatchers("/api/users/**").permitAll()
                                 .requestMatchers("/api/bookings/history").authenticated()
-                                .requestMatchers("api/schedules/**").permitAll()
-                                .requestMatchers("api/categories/**").permitAll()
-                                .requestMatchers("api/recommendations/**").permitAll()
+                                .requestMatchers("/api/schedules/**").permitAll()
+                                .requestMatchers("/api/categories/**").permitAll()
+                                .requestMatchers("/api/recommendations/**").permitAll()
                                 .requestMatchers("/api/otp/**").permitAll()
                                 .requestMatchers("/api/bookings/cancel/**").permitAll()
                                 .requestMatchers("/api/reviews/by-tour/**").permitAll()
