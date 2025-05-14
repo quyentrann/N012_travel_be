@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDTO;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.*;
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class TourBookingService {
@@ -39,8 +41,8 @@ public class TourBookingService {
         return tourBookingRepository.findByCustomerId(customerId);
     }
 
-    public TourBooking getTourBookingById(Long id) {
-        return tourBookingRepository.findById(id).orElse(null);
+    public Optional<TourBooking> getTourBookingById(Long id) {
+        return tourBookingRepository.findById(id);
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {
@@ -114,5 +116,49 @@ public class TourBookingService {
 
     public List<BookingHistory> getBookingHistory(Long bookingId) {
         return bookingHistoryRepository.findByTour_TourId(bookingId);
+    }
+
+    // lấy customer theo bookingid
+    public Optional<Customer> getCustomerByBookingId(Long bookingId) {
+        Optional<TourBooking> booking = tourBookingRepository.findByBookingId(bookingId);
+        if (booking.isPresent()) {
+            return Optional.ofNullable(booking.get().getCustomer());
+        } else {
+            return Optional.empty();
+        }
+    }
+    public Optional<Tour> getTourByBookingId(Long bookingId) {
+        Optional<TourBooking> booking = tourBookingRepository.findByBookingId(bookingId);
+        if (booking.isPresent()) {
+            return Optional.ofNullable(booking.get().getTour());
+        } else {
+            return Optional.empty();
+        }
+    }
+    public List<TourBookingDTO> getAllBookings() {
+        List<TourBooking> bookings = tourBookingRepository.findAll();
+
+        return bookings.stream().map(booking -> {
+            // Lấy thông tin Customer và Tour
+            String customerName = booking.getCustomer().getFullName();  // Giả sử Customer có trường 'name'
+            String tourName = booking.getTour().getName();  // Giả sử Tour có trường 'name'
+
+            return new TourBookingDTO(
+                    booking.getBookingId(),
+                    booking.getNumberPeople(),
+                    booking.getTotalPrice(),
+                    booking.getBookingDate(),
+                    booking.getStatus().toString(),
+                    booking.getTour().getName(),
+                    booking.getTour().getImageURL(),
+                    booking.getCustomer().getFullName()
+            );
+        }).collect(Collectors.toList());
+    }
+
+    public String getTourNameByBookingId(Long bookingId) {
+        return tourBookingRepository.findById(bookingId)
+                .map(booking -> booking.getTour().getName())
+                .orElse(null);
     }
 }

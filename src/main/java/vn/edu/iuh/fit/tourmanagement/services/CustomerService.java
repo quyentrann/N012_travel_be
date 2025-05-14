@@ -3,6 +3,7 @@ package vn.edu.iuh.fit.tourmanagement.services;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import vn.edu.iuh.fit.tourmanagement.models.Customer;
+import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.CustomerRepository;
 
 import java.time.LocalDate;
@@ -24,6 +25,12 @@ public class CustomerService {
 
     public Customer updateCustomer(Customer customer) {
         return customerRepository.save(customer);
+    }
+
+    public User getUserByCustomerId(Long customerId) {
+        return customerRepository.findById(customerId)
+                .map(Customer::getUser)
+                .orElse(null);
     }
 
     public void partialUpdateCustomer(Long id, Map<String, Object> updates) {

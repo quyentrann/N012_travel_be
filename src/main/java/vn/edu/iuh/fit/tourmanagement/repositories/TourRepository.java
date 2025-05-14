@@ -10,6 +10,7 @@ import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourCategory;
 import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,5 +28,12 @@ public interface TourRepository extends JpaRepository<Tour, Long> {
     @Cacheable(value = "similarTours", key = "#tourIds.hashCode()")
     @Query("SELECT t FROM Tour t WHERE t.tourcategory IN (SELECT DISTINCT t2.tourcategory FROM Tour t2 WHERE t2.tourId IN :tourIds)")
     List<Tour> findSimilarToursBasedOnUserHistory(List<Long> tourIds);
+
+    @Query("SELECT t FROM Tour t LEFT JOIN TourBooking b ON t.tourId = b.tour.tourId " +
+            "WHERE b.bookingDate >= :startDate " +
+            "GROUP BY t.tourId " +
+            "ORDER BY COUNT(b.bookingId) DESC")
+    List<Tour> findTopBookedToursSince(@Param("startDate") LocalDateTime startDate);
+
 
 }

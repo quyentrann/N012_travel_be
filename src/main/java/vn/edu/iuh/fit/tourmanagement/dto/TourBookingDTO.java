@@ -19,4 +19,6 @@ public class TourBookingDTO {
     private String status;
     private String tourName;
     private String tourImage;
+    //thêm chi tiêt để hiển thị chi tiết customer và tour
+    private String customerName;
 }

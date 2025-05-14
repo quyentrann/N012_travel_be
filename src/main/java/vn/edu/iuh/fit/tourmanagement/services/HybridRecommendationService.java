@@ -9,6 +9,7 @@ import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.SearchHistoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -26,10 +27,15 @@ public class HybridRecommendationService {
     @Cacheable(value = "similarTours", key = "#user.id")
     public List<Tour> getRecommendations(User user) {
         List<SearchHistory> history = searchHistoryRepository.findTop10ByUserOrderBySearchTimeDesc(user);
+        if (history.isEmpty()) {
+            // Nếu user chưa có lịch sử tìm kiếm => chỉ gợi ý những tour phổ biến (bestseller)
+            return getPopularTours();
+        }
         List<Tour> contentBasedTours = contentBasedFiltering(history);
         List<Tour> collaborativeTours = collaborativeFiltering(user);
+        List<Tour> popularTours = getPopularTours(); // <== mới thêm nè!
 
-        return mergeRecommendations(contentBasedTours, collaborativeTours);
+        return mergeRecommendations(contentBasedTours, collaborativeTours,popularTours);
     }
 
     /**
@@ -124,9 +130,20 @@ public class HybridRecommendationService {
     }
 
     /**
+     * Gợi ý những tour được đặt nhiều nhất trong khoảng 30 ngày gần nhất.
+     */
+    private List<Tour> getPopularTours() {
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        return tourRepository.findTopBookedToursSince(thirtyDaysAgo)
+                .stream()
+                .limit(5)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Hợp nhất hai danh sách gợi ý và loại bỏ kết quả trùng lặp.
      */
-    private List<Tour> mergeRecommendations(List<Tour> contentBased, List<Tour> collaborative) {
+    private List<Tour> mergeRecommendations(List<Tour> contentBased, List<Tour> collaborative,List<Tour> popular) {
         if (contentBased.isEmpty()) return collaborative;
         if (collaborative.isEmpty()) return contentBased;
 
@@ -134,6 +151,7 @@ public class HybridRecommendationService {
         Set<Tour> uniqueTours = new LinkedHashSet<>();
         uniqueTours.addAll(contentBased);
         uniqueTours.addAll(collaborative);
+        uniqueTours.addAll(popular);
         return new ArrayList<>(uniqueTours);
     }
 }

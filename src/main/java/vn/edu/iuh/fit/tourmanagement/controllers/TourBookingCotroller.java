@@ -7,13 +7,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDTO;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
-import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
-import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
-import vn.edu.iuh.fit.tourmanagement.models.User;
+import vn.edu.iuh.fit.tourmanagement.models.*;
 import vn.edu.iuh.fit.tourmanagement.services.TourBookingService;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,8 +31,8 @@ public class TourBookingCotroller {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TourBooking> getTourBookingById(@PathVariable Long id) {
-        TourBooking tourBooking = tourBookingService.getTourBookingById(id);
+    public ResponseEntity<?> getTourBookingById(@PathVariable Long id) {
+        Optional<TourBooking> tourBooking = tourBookingService.getTourBookingById(id);
         if (tourBooking == null) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
@@ -81,11 +80,47 @@ public class TourBookingCotroller {
                         booking.getBookingDate(),
                         booking.getStatus().toString(),
                         booking.getTour().getName(),
-                        booking.getTour().getImageURL()
+                        booking.getTour().getImageURL(),
+                        booking.getCustomer().getFullName()
                 )
         ).collect(Collectors.toList());
 
         return ResponseEntity.ok(bookingDTOs);
+    }
+
+    @GetMapping("/customer/{bookingId}")
+    public ResponseEntity<Customer> getCustomerByBookingId(@PathVariable Long bookingId) {
+        Optional<Customer> customer = tourBookingService.getCustomerByBookingId(bookingId);
+        return customer.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/{customerId}/customer")
+    public ResponseEntity<List<TourBooking>> getBookingsByCustomerId(@PathVariable Long customerId) {
+        List<TourBooking> bookings = tourBookingService.getTourBookingByCustomerId(customerId);
+        if (bookings.isEmpty()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(bookings);
+    }
+
+    @GetMapping("/tour/{bookingId}")
+    public ResponseEntity<Tour> getTourByBookingId(@PathVariable Long bookingId) {
+        Optional<Tour> tour = tourBookingService.getTourByBookingId(bookingId);
+        return tour.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+    @GetMapping("/all")
+    public List<TourBookingDTO> getAllBookings() {
+        return tourBookingService.getAllBookings();
+    }
+
+
+    @GetMapping("/tourName/{bookingId}")
+    public ResponseEntity<String> getTourNameByBookingId(@PathVariable Long bookingId) {
+        String tourName = tourBookingService.getTourNameByBookingId(bookingId);
+        if (tourName == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(tourName);
     }
 
 }
