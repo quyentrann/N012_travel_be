@@ -40,15 +40,10 @@ public class TourBookingController {
     }
 
     private double calculateCancellationFee(TourBooking booking, LocalDateTime cancelDate, boolean isHoliday) {
-        // Lấy ngày khởi hành của tour
-        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay();
-
-        // Tính số ngày trước khi tour bắt đầu
+        LocalDateTime tourStartDate = booking.getDepartureDate().atStartOfDay(); // Dùng departureDate
         long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(cancelDate, tourStartDate);
-
         double cancellationFee = 0;
         if (isHoliday) {
-            // Phí hủy cho ngày lễ
             if (daysBeforeTour >= 30) {
                 cancellationFee = 0.2 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 15) {
@@ -58,10 +53,9 @@ public class TourBookingController {
             } else if (daysBeforeTour >= 3) {
                 cancellationFee = 0.8 * booking.getTotalPrice();
             } else {
-                cancellationFee = booking.getTotalPrice(); // 100% phí
+                cancellationFee = booking.getTotalPrice();
             }
         } else {
-            // Phí hủy cho ngày thường
             if (daysBeforeTour >= 14) {
                 cancellationFee = 0.1 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 7) {
@@ -71,10 +65,9 @@ public class TourBookingController {
             } else if (daysBeforeTour >= 1) {
                 cancellationFee = 0.7 * booking.getTotalPrice();
             } else {
-                cancellationFee = booking.getTotalPrice(); // 100% phí
+                cancellationFee = booking.getTotalPrice();
             }
         }
-
         return cancellationFee;
     }
 
@@ -127,6 +120,7 @@ public class TourBookingController {
                 tourBooking.getNumberPeople(),
                 tourBooking.getTotalPrice(),
                 tourBooking.getBookingDate(),
+                tourBooking.getDepartureDate(), // Thêm departureDate
                 tourBooking.getStatus().toString(),
                 tourDTO
         );
@@ -247,13 +241,14 @@ public class TourBookingController {
             return new TourBookingDTO(
                     booking.getBookingId(),
                     booking.getNumberPeople(),
-                    tour.getPrice(),
+                    booking.getTotalPrice(), // Sửa: Dùng totalPrice thay vì tour.getPrice()
                     booking.getBookingDate(),
+                    booking.getDepartureDate(), // Thêm departureDate
                     booking.getStatus().toString(),
                     tourDTO
             );
         }).collect(Collectors.toList());
-        return ResponseEntity.ok(bookingDTOs); // Luôn trả về mảng, dù rỗng
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @GetMapping("/history/{bookingId}")

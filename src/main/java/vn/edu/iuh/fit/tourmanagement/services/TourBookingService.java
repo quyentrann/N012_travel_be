@@ -12,6 +12,7 @@ import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.*;
 import vn.edu.iuh.fit.tourmanagement.repositories.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -55,83 +56,85 @@ public class TourBookingService {
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {
-        // Lấy User từ Authentication
         User user = (User) authentication.getPrincipal();
-
+        int adults = bookingRequest.getNumberAdults();
+        int children = bookingRequest.getNumberChildren();
+        int infants = bookingRequest.getNumberInfants();
         if (user.getCustomer() == null) {
             throw new Exception("User is not a customer");
         }
 
         Customer customer = user.getCustomer();
 
-        // Cập nhật thông tin khách hàng nếu có
         if (bookingRequest.getFullName() != null) {
             customer.setFullName(bookingRequest.getFullName());
         }
         if (bookingRequest.getPhoneNumber() != null) {
             customer.setPhoneNumber(bookingRequest.getPhoneNumber());
         }
+        customerRepository.save(customer);
 
-        customerRepository.save(customer); // Lưu thông tin mới
-
-        // Lấy thông tin tour
         Tour tour = tourRepository.findById(bookingRequest.getTourId())
                 .orElseThrow(() -> new Exception("Tour not found"));
 
-        // Kiểm tra số lượng chỗ trống
         if (tour.getAvailableSlot() < bookingRequest.getNumberPeople()) {
             throw new Exception("Not enough available slots");
         }
 
-        // Nếu là ngày lễ, tăng giá
-//        double totalPrice = bookingRequest.getTotalPrice();
-//        if (bookingRequest.isHoliday()) {
-//            double holidayMultiplier = 1.2;  // Giả sử tăng 20% vào giá tour
-//            totalPrice = totalPrice * holidayMultiplier;
-//        }
+        int totalParticipants = adults + children + infants;
+        if (totalParticipants != bookingRequest.getNumberPeople()) {
+            throw new Exception("Total number of adults, children, and infants does not match numberPeople");
+        }
+
+        // Kiểm tra ngày khởi hành hợp lệ
+        LocalDate departureDate = bookingRequest.getDepartureDate();
+        if (departureDate == null) {
+            throw new Exception("Departure date is required");
+        }
+        boolean validDepartureDate = tour.getTourDetails().stream()
+                .anyMatch(detail -> detail.getStartDate().equals(departureDate));
+        if (!validDepartureDate) {
+            throw new Exception("Invalid departure date for this tour");
+        }
 
         // Tạo booking
         TourBooking booking = TourBooking.builder()
                 .customer(customer)
                 .tour(tour)
                 .numberPeople(bookingRequest.getNumberPeople())
-//                .totalPrice(totalPrice)
                 .totalPrice(bookingRequest.getTotalPrice())
                 .bookingDate(LocalDateTime.now())
+                .departureDate(departureDate) // Lưu departureDate
                 .status(BookingStatus.CONFIRMED)
+                .numberAdults(adults)
+                .numberChildren(children)
+                .numberInfants(infants)
                 .build();
 
-        // Lưu booking
         TourBooking savedBooking = tourBookingRepository.save(booking);
 
-        // Cập nhật slot tour
         tour.setAvailableSlot(tour.getAvailableSlot() - bookingRequest.getNumberPeople());
         tourRepository.save(tour);
-        // **Gửi email xác nhận đặt tour**
+
         try {
-            String departureLocation = tour.getLocation(); // Nơi khởi hành
-            String departureDate = "Ngày khởi hành không xác định";  // Đặt mặc định
-            if (tour.getTourDetails() != null && !tour.getTourDetails().isEmpty()) {
-                departureDate = tour.getTourDetails().get(0).getStartDate().toString();
-            }
+            String departureLocation = tour.getLocation();
+            String departureDateStr = departureDate.toString();
 
-            String paymentDeadline = booking.getBookingDate().plusDays(3).toString(); // Giả sử hạn thanh toán là 3 ngày sau
+            String paymentDeadline = booking.getBookingDate().plusDays(3).toString();
 
-            // Gửi email với thông tin chi tiết bổ sung
             mailService.sendBookingConfirmationEmail(
-                    user.getEmail(), // Lấy email từ User
-                    customer.getFullName(), // Tên khách hàng
-                    tour.getName(), // Tên tour
-                    departureLocation, // Nơi khởi hành
-                    departureDate, // Ngày khởi hành
-                    bookingRequest.getNumberPeople(), // Số người tham gia
-                    bookingRequest.getTotalPrice(), // Tổng số tiền
-                    paymentDeadline // Hạn thanh toán
+                    user.getEmail(),
+                    customer.getFullName(),
+                    tour.getName(),
+                    departureLocation,
+                    departureDateStr,
+                    bookingRequest.getNumberPeople(),
+                    bookingRequest.getTotalPrice(),
+                    paymentDeadline
             );
         } catch (Exception e) {
             System.err.println("Lỗi khi gửi email xác nhận: " + e.getMessage());
         }
-
 
         return savedBooking;
     }
@@ -299,4 +302,6 @@ public class TourBookingService {
     public List<BookingHistory> getBookingHistory(Long bookingId) {
         return bookingHistoryRepository.findByTour_TourId(bookingId);
     }
+
+
 }

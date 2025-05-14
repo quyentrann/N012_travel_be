@@ -108,12 +108,12 @@ public class SearchHistoryController {
         }
 
         try {
-            List<SearchHistory> history = searchHistoryService.getUserSearchHistory(user);
-            logger.info("Returning search history for user ID: " + user.getId() + ", count: " + history.size());
-            return ResponseEntity.ok(history);
+            List<Tour> recommendedTours = searchHistoryService.getRecommendedToursFromHistory(user);
+            logger.info("Returning " + recommendedTours.size() + " recommended tours for user ID: " + user.getId());
+            return ResponseEntity.ok(recommendedTours);
         } catch (Exception e) {
-            logger.severe("Error retrieving search history: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving search history");
+            logger.severe("Error retrieving recommended tours: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving recommended tours");
         }
     }
 
