@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
+import vn.edu.iuh.fit.tourmanagement.enums.RefundStatus;
 
 import java.time.LocalDateTime;
 
@@ -23,6 +24,13 @@ public class BookingHistory {
     @JoinColumn(name = "booking_id", nullable = false)
     @JsonIgnore
     private TourBooking booking;
+
+    @Column(name = "additional_payment")
+    private double additionalPayment; // Số tiền cần thanh toán bổ sung
+
+    @Column(name = "refund_status")
+    @Enumerated(EnumType.STRING)
+    private RefundStatus refundStatus; // Trạng thái hoàn tiền
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
