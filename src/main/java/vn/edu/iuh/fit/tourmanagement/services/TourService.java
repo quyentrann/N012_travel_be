@@ -8,11 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import vn.edu.iuh.fit.tourmanagement.dto.tour.TourDTO;
+import vn.edu.iuh.fit.tourmanagement.dto.tour.TourRequest;
+import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
-import vn.edu.iuh.fit.tourmanagement.repositories.SearchHistoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
 import java.text.Normalizer;
@@ -394,5 +396,41 @@ public class TourService {
 
     public List<Tour> filterToursByMonth(LocalDate startOfMonth, LocalDate endOfMonth) {
         return tourRepository.findByTourDetailsStartDateBetweenOrTourDetailsEndDateBetween(startOfMonth, endOfMonth, startOfMonth, endOfMonth);
+    }
+
+    public List<TourDTO> getAllTourManage(){
+        List<Tour> tours = tourRepository.findAll();
+        List<TourDTO> tourRequests = tours.stream().map(tour->{
+            return new TourDTO(
+                    tour.getTourId(),
+                    tour.getName(),
+                    tour.getLocation(),
+                    tour.getPrice(),
+                    tour.getAvailableSlot(),
+                    tour.getTourcategory(),
+                    tour.getDescription(),
+                    tour.getStatus(),
+                    tour.getImageURL()
+            );
+        }).toList();
+        return tourRequests;
+    }
+
+    @Autowired
+    TourCategoryRepository tourCategoryRepository;
+
+    public Tour addTour(TourRequest tourRequest) {
+        Tour tour = new Tour();
+        tour.setName(tourRequest.getName());
+        tour.setLocation(tourRequest.getLocation());
+        tour.setPrice(tourRequest.getPrice());
+        tour.setAvailableSlot(tourRequest.getAvailableSlot());
+        tour.setTourcategory(tourCategoryRepository.findById(tourRequest.getTourcategoryId()).get());
+        tour.setDescription(tourRequest.getDescription());
+        tour.setStatus(TourStatus.valueOf(tourRequest.getStatus().trim()));
+        tour.setImageURL(tourRequest.getImageURL());
+
+        Tour savedTour = tourRepository.save(tour);
+        return savedTour;
     }
 }

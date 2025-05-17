@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class TourBookingService {
@@ -48,8 +49,7 @@ public class TourBookingService {
     }
 
     public TourBooking getTourBookingById(Long id) {
-        return tourBookingRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking với ID: " + id));
+        return tourBookingRepository.findById(id).orElse(null);
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {

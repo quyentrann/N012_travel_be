@@ -1,5 +1,7 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -7,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.web.multipart.MultipartFile;
 import vn.edu.iuh.fit.tourmanagement.dto.tour.TourRequest;
 import vn.edu.iuh.fit.tourmanagement.enums.TourStatus;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
@@ -34,7 +37,8 @@ public class TourController {
     private TourService tourService;
     @Autowired
     private TourCategoryService categoryService;
-
+    @Autowired
+    private Cloudinary cloudinary;
     @Autowired
     private TourRepository tourRepository;
 
@@ -320,14 +324,14 @@ public class TourController {
         }
     }
 
-    @PostMapping("/category/{categoryId}")
-    public ResponseEntity<Tour> createTour(@PathVariable Long categoryId, @RequestBody Tour tour) {
-        TourCategory category = categoryService.getTourCategoryById(categoryId);
-        if (category == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-        tour.setTourcategory(category);
-        Tour createdTour = tourService.createTour(tour);
+    @PostMapping("/category")
+    public ResponseEntity<Tour> createTour( @RequestBody TourRequest tour) {
+//        TourCategory category = categoryService.getTourCategoryById(categoryId);
+//        if (category == null) {
+//            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+//        }
+//        tour.setTourcategory(category);
+        Tour createdTour = tourService.addTour(tour);
         return new ResponseEntity<>(createdTour, HttpStatus.CREATED);
     }
 
@@ -713,5 +717,34 @@ public class TourController {
     }
 
 
+    @GetMapping("/tour-manage")
+    public ResponseEntity<List<vn.edu.iuh.fit.tourmanagement.dto.tour.TourDTO>> getAllManage(){
+        return ResponseEntity.ok(tourService.getAllTourManage());
+    }
+
+    @PostMapping("/upload-tour")
+    public ResponseEntity<?> uploadTourImage(@RequestParam("avatar") MultipartFile file) {
+        try {
+            if (file.isEmpty()) {
+                return ResponseEntity.badRequest().body("File không được để trống!");
+            }
+            String fileName = "avatars/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                    "public_id", fileName,
+                    "overwrite", true,
+                    "resource_type", "image"
+            ));
+
+            String imageUrl = (String) uploadResult.get("secure_url");
+
+            Map<String, String> response = new HashMap<>();
+            response.put("avatarUrl", imageUrl);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Tải ảnh thất bại: " + e.getMessage());
+        }
+    }
 
 }

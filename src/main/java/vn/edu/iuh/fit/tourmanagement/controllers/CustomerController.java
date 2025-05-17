@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.edu.iuh.fit.tourmanagement.models.Customer;
+import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.services.CustomerService;
 
 import java.util.List;
@@ -34,6 +35,14 @@ public class CustomerController {
         return new ResponseEntity<>(customer, HttpStatus.OK);
     }
 
+    @GetMapping("/user/{id}")
+    public ResponseEntity<User> getUserByCustomerId(@PathVariable("id") Long id) {
+        User user = customerService.getUserByCustomerId(id);
+        if (user == null) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+        return new ResponseEntity<>(user, HttpStatus.OK);
+    }
     @PutMapping("/{id}")
     public ResponseEntity<Customer> updateCustomer(@PathVariable("id") Long id, @RequestBody Customer customer) {
         Customer currentCustomer = customerService.getCustomerById(id);
