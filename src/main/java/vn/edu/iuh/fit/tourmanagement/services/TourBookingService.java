@@ -1,11 +1,15 @@
 package vn.edu.iuh.fit.tourmanagement.services;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.iuh.fit.tourmanagement.dto.*;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
+import vn.edu.iuh.fit.tourmanagement.enums.RefundStatus;
 import vn.edu.iuh.fit.tourmanagement.models.*;
 import vn.edu.iuh.fit.tourmanagement.repositories.*;
 
@@ -35,6 +39,8 @@ public class TourBookingService {
 
     @Autowired
     private MailService mailService; // Thêm MailService vào
+
+    private static final Logger logger = LoggerFactory.getLogger(TourBookingService.class);
 
     public TourBookingService(TourBookingRepository tourBookingRepository) {
         this.tourBookingRepository = tourBookingRepository;
@@ -218,7 +224,6 @@ public class TourBookingService {
 
 
 
-
     // Hàm tính phí hủy
     private double calculateCancellationFee(TourBooking booking, LocalDateTime cancelDate, boolean isHoliday) {
         // Kiểm tra tourDetails
@@ -297,7 +302,7 @@ public class TourBookingService {
 
 
     public List<BookingHistory> getBookingHistory(Long bookingId) {
-        return bookingHistoryRepository.findByTour_TourId(bookingId);
+        return bookingHistoryRepository.findByBooking_BookingId(bookingId);
     }
 
 
@@ -389,121 +394,173 @@ public class TourBookingService {
 
     @Transactional
     public TourBooking changeTour(Long bookingId, ChangeTourRequest request, User user) {
-        TourBooking booking = tourBookingRepository.findById(bookingId)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking"));
+        logger.info("Starting changeTour for bookingId: {}, user: {}", bookingId, user.getUsername());
 
+        // Validate user permissions
+        TourBooking booking = tourBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Booking không tồn tại: " + bookingId));
         if (user.getCustomer() == null || !booking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
-            throw new IllegalStateException("Bạn không có quyền thay đổi booking này.");
+            logger.error("User {} does not have permission to change booking {}", user.getUsername(), bookingId);
+            throw new IllegalStateException("Bạn không có quyền đổi tour này");
         }
 
+        // Validate booking status
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PAID) {
-            throw new IllegalStateException("Chỉ có thể thay đổi booking ở trạng thái CONFIRMED hoặc PAID.");
+            logger.warn("Booking {} is not in CONFIRMED or PAID status: {}", bookingId, booking.getStatus());
+            throw new IllegalStateException("Chỉ có thể đổi tour ở trạng thái CONFIRMED hoặc PAID");
         }
 
         Tour tour = booking.getTour();
-        if (!tour.getStatus().toString().equals("ACTIVE")) {
-            throw new IllegalArgumentException("Tour không còn hoạt động.");
-        }
-
-        // Tính tổng số người
         int numberPeople = request.getNumberAdults() + request.getNumberChildren() + request.getNumberInfants();
-
-        // Kiểm tra số chỗ khả dụng
-        if (tour.getAvailableSlot() + booking.getNumberPeople() < numberPeople) {
-            throw new IllegalArgumentException("Không đủ chỗ cho số người yêu cầu.");
+        if (numberPeople <= 0) {
+            logger.error("Invalid number of people: {}", numberPeople);
+            throw new IllegalArgumentException("Số lượng người phải lớn hơn 0");
         }
 
-        // Kiểm tra ngày khởi hành mới
+        // Validate departure date
         LocalDate newDepartureDate = request.getDepartureDate();
         boolean validDepartureDate = tour.getTourDetails().stream()
                 .anyMatch(detail -> detail.getStartDate().equals(newDepartureDate));
         if (!validDepartureDate) {
-            throw new IllegalArgumentException("Ngày khởi hành mới không hợp lệ cho tour này.");
+            logger.error("Invalid departure date {} for tour {}", newDepartureDate, tour.getTourId());
+            throw new IllegalArgumentException("Ngày khởi hành mới không hợp lệ cho tour này");
         }
 
-        // Kiểm tra thời gian đổi lịch
-        LocalDateTime changeDate = request.getChangeDate() != null ? request.getChangeDate() : LocalDateTime.now();
-        LocalDateTime departureDate = booking.getDepartureDate().atStartOfDay();
-        long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(changeDate, departureDate);
-        if (request.isHoliday() && daysBeforeTour < 3) {
-            throw new IllegalArgumentException("Không thể thay đổi lịch trước 3 ngày trong dịp lễ.");
-        } else if (!request.isHoliday() && daysBeforeTour < 1) {
-            throw new IllegalArgumentException("Không thể thay đổi lịch trước 1 ngày.");
+        // Validate available slots
+        if (tour.getAvailableSlot() + booking.getNumberPeople() < numberPeople) {
+            logger.error("Not enough slots for bookingId: {}, required: {}, available: {}",
+                    bookingId, numberPeople, tour.getAvailableSlot() + booking.getNumberPeople());
+            throw new IllegalArgumentException("Không đủ chỗ cho số người yêu cầu");
         }
 
-        // Tính phí đổi và giá mới
-        double changeFee = calculateCancellationFee(booking, changeDate, request.isHoliday());
-        double basePrice = tour.getPrice();
-        double adultPrice = basePrice;
-        double childPrice = basePrice * 0.85;
-        double infantPrice = basePrice * 0.30;
+        // Calculate prices
+        double adultPrice = tour.getPrice();
+        double childPrice = adultPrice * 0.85; // 85% for children
+        double infantPrice = adultPrice * 0.30; // 30% for infants
         double holidayMultiplier = request.isHoliday() ? 1.2 : 1.0;
 
         double newTotalPrice = (adultPrice * request.getNumberAdults() +
                 childPrice * request.getNumberChildren() +
                 infantPrice * request.getNumberInfants()) * holidayMultiplier;
 
-        // Áp dụng giảm giá 10% nếu >= 5 người
-        int totalParticipants = request.getNumberAdults() + request.getNumberChildren() + request.getNumberInfants();
-        if (totalParticipants >= 5) {
+        // Apply 10% discount if >= 5 people
+        if (numberPeople >= 5) {
             newTotalPrice *= 0.9;
         }
 
-        // Tính chênh lệch giá và hoàn tiền
         double priceDifference = newTotalPrice - booking.getTotalPrice();
-        double refundAmount = 0;
-        if (booking.getStatus() == BookingStatus.PAID && priceDifference < 0) {
-            refundAmount = Math.abs(priceDifference) - changeFee;
-            if (refundAmount < 0) {
-                refundAmount = 0;
-            }
+        double changeFee = calculateChangeFee(booking, request);
+        double refundAmount = priceDifference < 0 ? Math.abs(priceDifference) - changeFee : 0;
+        if (refundAmount < 0) {
+            refundAmount = 0;
         }
 
-        // Cập nhật số chỗ của tour
+        // Update tour slots
         tour.setAvailableSlot(tour.getAvailableSlot() + booking.getNumberPeople() - numberPeople);
-        tourRepository.save(tour);
+        try {
+            tourRepository.save(tour);
+            logger.info("Updated tour slots for tourId: {}, new available slots: {}", tour.getTourId(), tour.getAvailableSlot());
+        } catch (DataAccessException e) {
+            logger.error("Failed to update tour slots for tourId: {}, error: {}", tour.getTourId(), e.getMessage());
+            throw new RuntimeException("Failed to update tour slots", e);
+        }
 
-        // Cập nhật booking
+        // Update booking
+        BookingStatus oldStatus = booking.getStatus();
+        booking.setDepartureDate(newDepartureDate);
         booking.setNumberPeople(numberPeople);
         booking.setNumberAdults(request.getNumberAdults());
         booking.setNumberChildren(request.getNumberChildren());
         booking.setNumberInfants(request.getNumberInfants());
-        booking.setDepartureDate(request.getDepartureDate());
         booking.setTotalPrice(newTotalPrice);
-        booking.setBookingDate(LocalDateTime.now());
+        booking.setStatus(priceDifference > 0 ? BookingStatus.PENDING_PAYMENT : BookingStatus.PAID);
 
-        // Lưu lịch sử thay đổi
+        // Create BookingHistory
         BookingHistory history = BookingHistory.builder()
                 .booking(booking)
-                .oldStatus(booking.getStatus())
+                .oldStatus(oldStatus)
                 .newStatus(booking.getStatus())
                 .changeDate(LocalDateTime.now())
-                .reason("Đổi lịch tour sang ngày " + request.getDepartureDate() + " với " + numberPeople + " người")
+                .reason("Đổi lịch tour sang ngày " + newDepartureDate + " với " + numberPeople + " người")
                 .cancellationFee(changeFee)
                 .refundAmount(refundAmount)
+                .additionalPayment(priceDifference > 0 ? priceDifference : 0)
+                .refundStatus(refundAmount > 0 ? RefundStatus.PENDING : RefundStatus.NONE)
                 .tour(tour)
                 .isHoliday(request.isHoliday())
+                .cancelDate(null)
                 .build();
-        bookingHistoryRepository.save(history);
 
-        // Gửi email xác nhận thay đổi
+        // Save history and booking in a single transaction
+        try {
+            bookingHistoryRepository.save(history);
+            tourBookingRepository.save(booking);
+            logger.info("Successfully saved BookingHistory and TourBooking: bookingId={}, newStatus={}, additionalPayment={}",
+                    bookingId, booking.getStatus(), priceDifference > 0 ? priceDifference : 0);
+        } catch (DataAccessException e) {
+            logger.error("Failed to save BookingHistory or TourBooking for bookingId: {}, error: {}", bookingId, e.getMessage());
+            throw new RuntimeException("Failed to save booking changes", e);
+        }
+
+        // Send email notification
         try {
             mailService.sendChangeTourConfirmationEmail(
                     user.getEmail(),
                     booking.getCustomer().getFullName(),
                     tour.getName(),
-                    request.getDepartureDate().toString(),
+                    newDepartureDate.toString(),
                     numberPeople,
                     newTotalPrice,
                     changeFee,
                     priceDifference,
                     refundAmount
             );
+            logger.info("Change tour email sent to: {}", user.getEmail());
         } catch (Exception e) {
-            System.err.println("Lỗi khi gửi email xác nhận thay đổi: " + e.getMessage());
+            logger.warn("Failed to send change tour email to {}, error: {}", user.getEmail(), e.getMessage());
         }
 
-        return tourBookingRepository.save(booking);
+        return booking;
+    }
+
+    private double calculateChangeFee(TourBooking booking, ChangeTourRequest request) {
+        LocalDateTime changeDate = request.getChangeDate() != null ? request.getChangeDate() : LocalDateTime.now();
+        LocalDateTime departureDate = booking.getDepartureDate().atStartOfDay();
+        long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(changeDate, departureDate);
+
+        double changeFee = 0;
+        if (request.isHoliday()) {
+            if (daysBeforeTour >= 30) {
+                changeFee = 0.2 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 15) {
+                changeFee = 0.4 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 7) {
+                changeFee = 0.6 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 3) {
+                changeFee = 0.8 * booking.getTotalPrice();
+            } else {
+                changeFee = booking.getTotalPrice();
+            }
+        } else {
+            if (daysBeforeTour >= 14) {
+                changeFee = 0.1 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 7) {
+                changeFee = 0.3 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 4) {
+                changeFee = 0.5 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 1) {
+                changeFee = 0.7 * booking.getTotalPrice();
+            } else {
+                changeFee = booking.getTotalPrice();
+            }
+        }
+        return changeFee;
+    }
+
+    private void validateBookingStatus(BookingStatus status, String fieldName) {
+        if (status == null) {
+            throw new IllegalArgumentException(fieldName + " cannot be null");
+        }
     }
 }
 

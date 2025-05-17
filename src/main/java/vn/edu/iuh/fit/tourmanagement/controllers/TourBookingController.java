@@ -1,6 +1,8 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
 import org.hibernate.Hibernate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -9,9 +11,12 @@ import org.springframework.web.bind.annotation.*;
 
 import vn.edu.iuh.fit.tourmanagement.dto.*;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
+import vn.edu.iuh.fit.tourmanagement.enums.RefundStatus;
+import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 import vn.edu.iuh.fit.tourmanagement.models.User;
+import vn.edu.iuh.fit.tourmanagement.repositories.BookingHistoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourBookingRepository;
 import vn.edu.iuh.fit.tourmanagement.services.TourBookingService;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
@@ -20,12 +25,14 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 @RequestMapping("/api/bookings")
 public class TourBookingController {
+    private static final Logger logger = LoggerFactory.getLogger(TourBookingController.class);
     @Autowired
     private TourBookingService tourBookingService;
 
@@ -34,6 +41,8 @@ public class TourBookingController {
     @Autowired
     private TourBookingRepository tourBookingRepository;
 
+    @Autowired
+    private BookingHistoryRepository bookingHistoryRepository;
     @GetMapping
     public Object getAllTourBooking() {
         return tourBookingService.getListTourBooking();
@@ -251,23 +260,46 @@ public class TourBookingController {
         return ResponseEntity.ok(bookingDTOs);
     }
 
-    @GetMapping("/history/{bookingId}")
-    public ResponseEntity<TourBookingDetailDTO> getBookingDetailById(@PathVariable Long bookingId, Authentication authentication) {
+    // TourBookingController.java
+    @GetMapping("/history/{bookingId}/entries")
+    public ResponseEntity<List<BookingHistoryDTO>> getBookingHistoryEntries(
+            @PathVariable Long bookingId, Authentication authentication) {
+        logger.info("Request to get booking history for bookingId: {}, user: {}", bookingId, authentication.getName());
+
         if (!(authentication.getPrincipal() instanceof User)) {
+            logger.warn("Unauthorized access: principal is not a User");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
-
         User user = (User) authentication.getPrincipal();
         if (user.getCustomer() == null) {
+            logger.warn("Forbidden: user {} has no customer profile", user.getUsername());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         }
 
-        try {
-            TourBookingDetailDTO bookingDetail = tourBookingService.getTourBookingDetailById(bookingId);
-            return ResponseEntity.ok(bookingDetail);
-        } catch (NoSuchElementException e) {
-            return ResponseEntity.notFound().build();
+        TourBooking booking = tourBookingService.getTourBookingById(bookingId);
+        if (booking == null || !booking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
+            logger.warn("Booking {} not found or user {} does not have permission", bookingId, user.getUsername());
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
+
+        List<BookingHistory> histories = tourBookingService.getBookingHistory(bookingId);
+        List<BookingHistoryDTO> historyDTOs = histories.stream().map(history -> new BookingHistoryDTO(
+                history.getId(),
+                history.getBooking().getBookingId(),
+                history.getOldStatus().toString(),
+                history.getNewStatus().toString(),
+                history.getChangeDate(),
+                history.getReason(),
+                history.getCancellationFee(),
+                history.getRefundAmount(),
+                history.getAdditionalPayment(),
+                history.getRefundStatus().toString(),
+                history.getCancelDate(),
+                history.isHoliday()
+        )).collect(Collectors.toList());
+
+        logger.info("Successfully retrieved {} history entries for bookingId: {}", historyDTOs.size(), bookingId);
+        return ResponseEntity.ok(historyDTOs);
     }
 
     @GetMapping("/pending-payment")
@@ -376,6 +408,65 @@ public class TourBookingController {
             return ResponseEntity.notFound().build();
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Collections.singletonMap("error", e.getMessage()));
+        }
+    }
+
+    // TourBookingController.java
+    @PostMapping("/confirm-additional-payment/{bookingId}")
+    public ResponseEntity<?> confirmAdditionalPayment(
+            @PathVariable Long bookingId, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+
+        TourBooking booking = tourBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Booking không tồn tại"));
+        if (!booking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Collections.singletonMap("error", "Bạn không có quyền xác nhận thanh toán này"));
+        }
+
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Collections.singletonMap("error", "Booking không ở trạng thái PENDING_PAYMENT"));
+        }
+
+        booking.setStatus(BookingStatus.PAID);
+        tourBookingRepository.save(booking);
+
+        // Log the status change in BookingHistory
+        BookingHistory history = BookingHistory.builder()
+                .booking(booking)
+                .oldStatus(BookingStatus.PENDING_PAYMENT)
+                .newStatus(BookingStatus.PAID)
+                .changeDate(LocalDateTime.now())
+                .reason("Xác nhận thanh toán bổ sung thành công")
+                .cancellationFee(0)
+                .refundAmount(0)
+                .additionalPayment(0)
+                .refundStatus(RefundStatus.NONE)
+                .tour(booking.getTour())
+                .isHoliday(false)
+                .cancelDate(null)
+                .build();
+        bookingHistoryRepository.save(history);
+        logger.info("BookingHistory saved for additional payment confirmation: bookingId={}, newStatus=PAID", bookingId);
+
+        return ResponseEntity.ok(Collections.singletonMap("message", "Thanh toán bổ sung đã được xác nhận"));
+    }
+
+    @GetMapping("/bookings/{id}")
+    public ResponseEntity<TourBooking> getBookingById(@PathVariable Long id) {
+        Optional<TourBooking> booking = tourBookingService.getBookingById(id);
+        if (booking.isPresent()) {
+            return ResponseEntity.ok(booking.get());
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(null);
         }
     }
 
