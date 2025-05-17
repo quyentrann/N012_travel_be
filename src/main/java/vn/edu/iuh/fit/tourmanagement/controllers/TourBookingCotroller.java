@@ -1,17 +1,22 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDTO;
-import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
-import vn.edu.iuh.fit.tourmanagement.models.*;
+import vn.edu.iuh.fit.tourmanagement.dto.*;
+import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
+import vn.edu.iuh.fit.tourmanagement.models.Tour;
+import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
+import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.services.TourBookingService;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -31,12 +36,59 @@ public class TourBookingCotroller {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> getTourBookingById(@PathVariable Long id) {
-        Optional<TourBooking> tourBooking = tourBookingService.getTourBookingById(id);
-        if (tourBooking == null) {
+    public ResponseEntity<TourBookingDTO> getTourBookingById(@PathVariable Long id, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+        TourBooking tourBooking = tourBookingService.getTourBookingById(id);
+        if (tourBooking == null || !tourBooking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
-        return new ResponseEntity<>(tourBooking, HttpStatus.OK);
+        Tour tour = tourBooking.getTour();
+        Hibernate.initialize(tour.getBookings()); // Fetch bookings
+        TourDTO tourDTO = new TourDTO(
+                tour.getTourId(),
+                tour.getName(),
+                tour.getPrice(),
+                tour.getAvailableSlot(),
+                tour.getLocation(),
+                tour.getDescription(),
+                tour.getHighlights(),
+                tour.getImageURL(),
+                tour.getExperiences(),
+                tour.getStatus() != null ? tour.getStatus().toString() : null,
+                tour.getTourcategory() != null ? new TourCategoryDTO(
+                        tour.getTourcategory().getCategoryId(),
+                        tour.getTourcategory().getCategoryName(),
+                        tour.getTourcategory().getDescription()
+                ) : null,
+                tour.getTourDetails() != null ? tour.getTourDetails().stream().map(TourDetailDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                tour.getTourSchedules() != null ? tour.getTourSchedules().stream().map(TourScheduleDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                tour.getReviews() != null ? tour.getReviews().stream().map(ReviewDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                tour.getBookings() != null ? tour.getBookings().stream()
+                        .map(booking -> new BookingDTO(
+                                booking.getBookingId(),
+                                booking.getNumberPeople(),
+                                booking.getTotalPrice(),
+                                booking.getBookingDate(),
+                                booking.getStatus().toString()
+                        ))
+                        .collect(Collectors.toList()) : Collections.emptyList()
+        );
+        TourBookingDTO bookingDTO = new TourBookingDTO(
+                tourBooking.getBookingId(),
+                tourBooking.getNumberPeople(),
+                tourBooking.getTotalPrice(),
+                tourBooking.getBookingDate(),
+                tourBooking.getDepartureDate(), // Thêm departureDate
+                tourBooking.getStatus().toString(),
+                tourDTO
+        );
+        return new ResponseEntity<>(bookingDTO, HttpStatus.OK);
     }
 
     @PostMapping("/book")
@@ -53,74 +105,100 @@ public class TourBookingCotroller {
         }
     }
 
+    @PutMapping("/cancel/{bookingId}")
+    public ResponseEntity<?> cancelBooking(@PathVariable Long bookingId,
+                                           @RequestBody CancelRequest cancelRequest,
+                                           Authentication authentication) {
+        try {
+            CancelResponse result = tourBookingService.cancelBooking(
+                    bookingId,
+                    cancelRequest.getReason(),
+                    cancelRequest.getCancelDate(),
+                    cancelRequest.isHoliday(),
+                    authentication
+            );
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", e.getMessage()));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Collections.singletonMap("error", e.getMessage()));
+        }
+    }
 
     @GetMapping("/history")
     public ResponseEntity<List<TourBookingDTO>> getBookingHistoryByCustomer(Authentication authentication) {
         if (!(authentication.getPrincipal() instanceof User)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+        List<TourBooking> bookings = tourBookingService.getTourBookingByCustomerId(user.getCustomer().getCustomerId());
+        List<TourBookingDTO> bookingDTOs = bookings.stream().map(booking -> {
+            Tour tour = booking.getTour();
+            Hibernate.initialize(tour.getBookings());
+            TourDTO tourDTO = new TourDTO(
+                    tour.getTourId(),
+                    tour.getName(),
+                    tour.getPrice(),
+                    tour.getAvailableSlot(),
+                    tour.getLocation(),
+                    tour.getDescription(),
+                    tour.getHighlights(),
+                    tour.getImageURL(),
+                    tour.getExperiences(),
+                    tour.getStatus() != null ? tour.getStatus().toString() : null,
+                    tour.getTourcategory() != null ? new TourCategoryDTO(
+                            tour.getTourcategory().getCategoryId(),
+                            tour.getTourcategory().getCategoryName(),
+                            tour.getTourcategory().getDescription()
+                    ) : null,
+                    tour.getTourDetails() != null ? tour.getTourDetails().stream().map(TourDetailDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    tour.getTourSchedules() != null ? tour.getTourSchedules().stream().map(TourScheduleDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    tour.getReviews() != null ? tour.getReviews().stream().map(ReviewDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    tour.getBookings() != null ? tour.getBookings().stream()
+                            .map(b -> new BookingDTO(
+                                    b.getBookingId(),
+                                    b.getNumberPeople(),
+                                    b.getTotalPrice(),
+                                    b.getBookingDate(),
+                                    b.getStatus().toString()
+                            ))
+                            .collect(Collectors.toList()) : Collections.emptyList()
+            );
+            return new TourBookingDTO(
+                    booking.getBookingId(),
+                    booking.getNumberPeople(),
+                    booking.getTotalPrice(), // Sửa: Dùng totalPrice thay vì tour.getPrice()
+                    booking.getBookingDate(),
+                    booking.getDepartureDate(), // Thêm departureDate
+                    booking.getStatus().toString(),
+                    tourDTO
+            );
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(bookingDTOs);
+    }
+
+    @GetMapping("/history/{bookingId}")
+    public ResponseEntity<TourBookingDetailDTO> getBookingDetailById(@PathVariable Long bookingId, Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
 
         User user = (User) authentication.getPrincipal();
-
         if (user.getCustomer() == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         }
 
-        List<TourBooking> bookings = tourBookingService.getTourBookingByCustomerId(user.getCustomer().getCustomerId());
-
-        if (bookings == null || bookings.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-
-        List<TourBookingDTO> bookingDTOs = bookings.stream().map(booking ->
-                new TourBookingDTO(
-                        booking.getBookingId(),
-                        booking.getNumberPeople(),
-                        booking.getTotalPrice(),
-                        booking.getBookingDate(),
-                        booking.getStatus().toString(),
-                        booking.getTour().getName(),
-                        booking.getTour().getImageURL(),
-                        booking.getCustomer().getFullName()
-                )
-        ).collect(Collectors.toList());
-
-        return ResponseEntity.ok(bookingDTOs);
-    }
-
-    @GetMapping("/customer/{bookingId}")
-    public ResponseEntity<Customer> getCustomerByBookingId(@PathVariable Long bookingId) {
-        Optional<Customer> customer = tourBookingService.getCustomerByBookingId(bookingId);
-        return customer.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/{customerId}/customer")
-    public ResponseEntity<List<TourBooking>> getBookingsByCustomerId(@PathVariable Long customerId) {
-        List<TourBooking> bookings = tourBookingService.getTourBookingByCustomerId(customerId);
-        if (bookings.isEmpty()) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(bookings);
-    }
-
-    @GetMapping("/tour/{bookingId}")
-    public ResponseEntity<Tour> getTourByBookingId(@PathVariable Long bookingId) {
-        Optional<Tour> tour = tourBookingService.getTourByBookingId(bookingId);
-        return tour.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
-    }
-    @GetMapping("/all")
-    public List<TourBookingDTO> getAllBookings() {
-        return tourBookingService.getAllBookings();
-    }
-
-
-    @GetMapping("/tourName/{bookingId}")
-    public ResponseEntity<String> getTourNameByBookingId(@PathVariable Long bookingId) {
-        String tourName = tourBookingService.getTourNameByBookingId(bookingId);
-        if (tourName == null) {
+        try {
+            TourBookingDetailDTO bookingDetail = tourBookingService.getTourBookingDetailById(bookingId);
+            return ResponseEntity.ok(bookingDetail);
+        } catch (NoSuchElementException e) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(tourName);
     }
 
 }

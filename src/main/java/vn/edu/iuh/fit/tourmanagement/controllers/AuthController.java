@@ -12,7 +12,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import vn.edu.iuh.fit.tourmanagement.dto.AuthRequest;
 import vn.edu.iuh.fit.tourmanagement.dto.auth.AuthResponse;
+import vn.edu.iuh.fit.tourmanagement.models.User;
+import vn.edu.iuh.fit.tourmanagement.repositories.UserRepository;
 import vn.edu.iuh.fit.tourmanagement.services.AuthJWTService;
+import vn.edu.iuh.fit.tourmanagement.services.MailService;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -21,6 +26,11 @@ public class AuthController {
 
     @Autowired
     private AuthJWTService authService;
+
+    @Autowired
+    private MailService mailService;
+    @Autowired
+    private UserRepository userRepository;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
@@ -39,6 +49,43 @@ public class AuthController {
                                               @RequestParam("password") String password) {
         System.out.println(password);
         return ResponseEntity.ok(authService.authentication(email, password));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthResponse> forgotPassword(@RequestParam("email") String email) {
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(AuthResponse.builder().message("Email không tồn tại trong hệ thống.").build());
+        }
+
+        boolean sent = mailService.sendOtpEmail(email);
+        if (sent) {
+            return ResponseEntity.ok(AuthResponse.builder().message("OTP đã được gửi đến email.").build());
+        } else {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(AuthResponse.builder().message("Không thể gửi OTP.").build());
+        }
+    }
+
+    // Xác minh OTP
+    @PostMapping("/verify-otp")
+    public ResponseEntity<AuthResponse> verifyOtp(@RequestParam("email") String email,
+                                                  @RequestParam("otp") String otp) {
+        boolean isValid = mailService.verifyOtp(email, otp);
+        if (!isValid) {
+            return ResponseEntity.badRequest()
+                    .body(AuthResponse.builder().message("OTP sai hoặc đã hết hạn.").build());
+        }
+        return ResponseEntity.ok(AuthResponse.builder().message("OTP hợp lệ. Bạn có thể đặt lại mật khẩu.").build());
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthResponse> resetPassword(@RequestParam("email") String email,
+                                                      @RequestParam("newPassword") String newPassword) {
+        AuthResponse response = authService.resetPassword(email, newPassword);
+        mailService.removeOtp(email);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/refreshToken")

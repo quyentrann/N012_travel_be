@@ -38,7 +38,11 @@ public class ReportService {
     }
     public double calculateTotalRevenue(LocalDateTime startDate, LocalDateTime endDate) {
         List<TourBooking> validBookings = tourBookingRepository
-                .findByBookingDateBetweenAndStatusNot(startDate, endDate, BookingStatus.CANCELED);
+                .findByBookingDateBetweenAndStatusIn(
+                        startDate,
+                        endDate,
+                        List.of(BookingStatus.PAID, BookingStatus.COMPLETED, BookingStatus.IN_PROGRESS)
+                );
         return validBookings.stream().mapToDouble(TourBooking::getTotalPrice).sum();
     }
 
@@ -76,7 +80,7 @@ public class ReportService {
         return cònirmedBookings.size();
     }
 
-    public List<TourBookingDTO> getBookingsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
+    public List<TourBookingDTOReport> getBookingsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
         List<TourBooking> bookings =  tourBookingRepository.findBookingsByDateRange(startDate, endDate);
 //        List<TourBooking> bookings = tourBookingRepository.findAll();
 
@@ -85,14 +89,13 @@ public class ReportService {
             String customerName = booking.getCustomer().getFullName();  // Giả sử Customer có trường 'name'
             String tourName = booking.getTour().getName();  // Giả sử Tour có trường 'name'
 
-            return new TourBookingDTO(
+            return new TourBookingDTOReport(
                     booking.getBookingId(),
                     booking.getNumberPeople(),
                     booking.getTotalPrice(),
                     booking.getBookingDate(),
                     booking.getStatus().toString(),
                     booking.getTour().getName(),
-                    booking.getTour().getImageURL(),
                     booking.getCustomer().getFullName()
             );
         }).collect(Collectors.toList());
@@ -187,5 +190,31 @@ public class ReportService {
         }).collect(Collectors.toList());
     }
 
+    public List<RevenueTourReport> getRevenueTourReport(LocalDate start, LocalDate end) {
+        LocalDateTime startDateTime = start.atStartOfDay();
+        LocalDateTime endDateTime = end.atTime(23, 59, 59);
+
+        List<Long> tourIds = tourBookingRepository.findDistinctTourIdsByBookingDateBetween(startDateTime, endDateTime);
+        List<RevenueTourReport> revenueReports = new ArrayList<>();
+        for (Long tourId : tourIds) {
+            RevenueTourReport revenueReport = new RevenueTourReport();
+            revenueReport.setTourName(tourRepository.findById(tourId)
+                    .orElseThrow(() -> new EntityNotFoundException("Tour not found with ID: " + tourId))
+                    .getName()
+            );
+            revenueReport.setTotalBookings(tourBookingRepository.countByBookingDateBetweenAndTour_TourId(startDateTime, endDateTime,tourId));
+            Double revenue = tourBookingRepository.getTotalRevenueByDateAndTourId(startDateTime, endDateTime, tourId);
+            if(revenue != null) {
+                revenueReport.setTotalRevenue(revenue);
+            } else {
+                revenueReport.setTotalRevenue(0.0);
+            }
+            if (revenueReport.getTotalRevenue()>0){
+                revenueReports.add(revenueReport);
+            }
+
+        }
+        return revenueReports;
+    }
 
 }

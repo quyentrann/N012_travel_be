@@ -1,8 +1,10 @@
 package vn.edu.iuh.fit.tourmanagement.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import vn.edu.iuh.fit.tourmanagement.enums.UserStatus;
 import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.User;
@@ -12,30 +14,43 @@ import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 @Service
 public class HybridRecommendationService {
+    private static final Logger logger = Logger.getLogger(HybridRecommendationService.class.getName());
     @Autowired
     private TourRepository tourRepository;
     @Autowired
     private SearchHistoryRepository searchHistoryRepository;
+
+    public HybridRecommendationService(TourRepository tourRepository, SearchHistoryRepository searchHistoryRepository) {
+        this.tourRepository = tourRepository;
+        this.searchHistoryRepository = searchHistoryRepository;
+    }
 
     /**
      * Trả về danh sách tour gợi ý dựa trên lịch sử tìm kiếm của người dùng.
      */
     @Cacheable(value = "similarTours", key = "#user.id")
     public List<Tour> getRecommendations(User user) {
+        if (user == null || user.getStatus() != UserStatus.ACTIVE) {
+            logger.warning("Invalid or non-active user, returning default recommendations");
+            return tourRepository.findAll().stream().limit(5).collect(Collectors.toList());
+        }
+
         List<SearchHistory> history = searchHistoryRepository.findTop10ByUserOrderBySearchTimeDesc(user);
         if (history.isEmpty()) {
-            // Nếu user chưa có lịch sử tìm kiếm => chỉ gợi ý những tour phổ biến (bestseller)
-            return getPopularTours();
+            logger.info("No search history for user: " + user.getEmail());
+            return tourRepository.findAll().stream().limit(5).collect(Collectors.toList());
         }
+
         List<Tour> contentBasedTours = contentBasedFiltering(history);
         List<Tour> collaborativeTours = collaborativeFiltering(user);
-        List<Tour> popularTours = getPopularTours(); // <== mới thêm nè!
-
-        return mergeRecommendations(contentBasedTours, collaborativeTours,popularTours);
+        List<Tour> merged = mergeRecommendations(contentBasedTours, collaborativeTours);
+        logger.info("Generated " + merged.size() + " recommendations for user: " + user.getEmail());
+        return merged;
     }
 
     /**
@@ -43,49 +58,59 @@ public class HybridRecommendationService {
      */
     private List<Tour> contentBasedFiltering(List<SearchHistory> history) {
         List<Tour> allTours = tourRepository.findAll();
-        List<String> searchQueries = history.stream()
-                .map(SearchHistory::getSearchQuery)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-
-        long now = System.currentTimeMillis(); // Thời gian hiện tại
         Map<Tour, Double> similarityScores = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+
         for (SearchHistory search : history) {
-            long searchTimeMillis = search.getSearchTime().atZone(ZoneOffset.UTC).toInstant().toEpochMilli();
-            double timeWeight = 1.0 / (1 + (now - searchTimeMillis) / 1000.0); // Trọng số thời gian
+            long timeDiffSeconds = java.time.Duration.between(search.getSearchTime(), now).getSeconds();
+            double timeWeight = 1.0 / (1.0 + timeDiffSeconds / 3600.0);
 
-            for (Tour tour : allTours) {
-                double nameScore = computeSimilarity(searchQueries, tour.getName(), 2.0);
-                double descScore = computeSimilarity(searchQueries, tour.getDescription(), 1.0);
-                double totalScore = (nameScore + descScore) * timeWeight; // Nhân với trọng số thời gian
+            // Ưu tiên tour đã click
+            if (search.getTour() != null) {
+                similarityScores.merge(search.getTour(), 5.0 * timeWeight, Double::sum); // Tăng trọng số
+            }
 
-                similarityScores.put(tour, similarityScores.getOrDefault(tour, 0.0) + totalScore);
+            // Xử lý từ khóa tìm kiếm
+            if (search.getSearchQuery() != null) {
+                for (Tour tour : allTours) {
+                    double score = 0.0;
+                    score += computeSimilarity(search.getSearchQuery(), tour.getName(), 2.0);
+                    score += computeSimilarity(search.getSearchQuery(), tour.getDescription(), 1.0);
+                    score += computeSimilarity(search.getSearchQuery(), tour.getLocation(), 1.5);
+                    if (tour.getTourcategory() != null && tour.getTourcategory().getCategoryName() != null) {
+                        score += computeSimilarity(search.getSearchQuery(), tour.getTourcategory().getCategoryName(), 1.2);
+                    }
+                    score *= timeWeight;
+                    similarityScores.merge(tour, score, Double::sum);
+                }
             }
         }
 
         return similarityScores.entrySet().stream()
                 .sorted(Map.Entry.<Tour, Double>comparingByValue().reversed())
                 .map(Map.Entry::getKey)
-                .limit(10)// giới hạn tour được gợi ý
+                .limit(15) // Tăng giới hạn để bao gồm cả tour từ từ khóa
                 .collect(Collectors.toList());
     }
+
+
     //    Viết hàm giúp kiểm tra mức độ trùng khớp với từ khóa tìm kiếm:
-    private double computeSimilarity(List<String> searchQueries, String text, double weight) {
-        if (text == null || searchQueries.isEmpty()) return 0.0;
+    private double computeSimilarity(String query, String text, double weight) {
+        if (query == null || text == null) return 0.0;
 
-        List<String> words = Arrays.asList(text.toLowerCase().split("\\s+"));
-        Map<String, Integer> termFrequency = new HashMap<>();
+        String[] queryWords = query.toLowerCase().split("\\s+");
+        String[] textWords = text.toLowerCase().split("\\s+");
+        double matches = 0;
 
-        for (String word : words) {
-            termFrequency.put(word, termFrequency.getOrDefault(word, 0) + 1);
+        for (String queryWord : queryWords) {
+            for (String textWord : textWords) {
+                if (textWord.contains(queryWord) || queryWord.contains(textWord)) {
+                    matches += 1.0;
+                }
+            }
         }
 
-        double score = 0.0;
-        for (String query : searchQueries) {
-            score += termFrequency.getOrDefault(query, 0);
-        }
-
-        return (score / words.size()) * weight; // Chuẩn hóa theo độ dài và nhân trọng số
+        return (matches / Math.max(textWords.length, 1)) * weight;
     }
 
 
@@ -104,12 +129,12 @@ public class HybridRecommendationService {
 
         double score = 0.0;
         for (String query : searchQueries) {
-            if (query != null) { // Kiểm tra query khác null trước khi xử lý
+            if (query != null) {
                 score += termFrequency.getOrDefault(query.toLowerCase(), 0);
             }
         }
 
-        return score / words.size(); // Chuẩn hóa theo độ dài mô tả
+        return score / words.size();
     }
 
 
@@ -118,40 +143,38 @@ public class HybridRecommendationService {
      */
     private List<Tour> collaborativeFiltering(User user) {
         List<SearchHistory> history = searchHistoryRepository.findTop10ByUserOrderBySearchTimeDesc(user);
-
         List<Long> tourIds = history.stream()
                 .map(h -> h.getTour() != null ? h.getTour().getTourId() : null)
-                .filter(Objects::nonNull) // Loại bỏ giá trị NULL
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
-        if (tourIds.isEmpty()) return Collections.emptyList(); // Không có tour nào trong lịch sử
 
-        List<Tour> similarTours = tourRepository.findSimilarToursBasedOnUserHistory(tourIds);
-        return similarTours.stream().limit(5).collect(Collectors.toList());
-    }
+        if (tourIds.isEmpty()) {
+            logger.info("No tour clicks for user: " + user.getEmail());
+            return tourRepository.findAll().stream().limit(3).collect(Collectors.toList());
+        }
 
-    /**
-     * Gợi ý những tour được đặt nhiều nhất trong khoảng 30 ngày gần nhất.
-     */
-    private List<Tour> getPopularTours() {
-        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-        return tourRepository.findTopBookedToursSince(thirtyDaysAgo)
-                .stream()
-                .limit(5)
-                .collect(Collectors.toList());
+        try {
+            List<Tour> similarTours = tourRepository.findSimilarToursBasedOnUserHistory(tourIds);
+            logger.info("Found " + similarTours.size() + " collaborative tours for user: " + user.getEmail());
+            return similarTours.stream().limit(5).collect(Collectors.toList());
+        } catch (Exception e) {
+            logger.severe("Error in collaborative filtering: " + e.getMessage());
+            return tourRepository.findAll().stream().limit(3).collect(Collectors.toList());
+        }
     }
 
     /**
      * Hợp nhất hai danh sách gợi ý và loại bỏ kết quả trùng lặp.
      */
-    private List<Tour> mergeRecommendations(List<Tour> contentBased, List<Tour> collaborative,List<Tour> popular) {
-        if (contentBased.isEmpty()) return collaborative;
-        if (collaborative.isEmpty()) return contentBased;
-
-
+    private List<Tour> mergeRecommendations(List<Tour> contentBased, List<Tour> collaborative) {
         Set<Tour> uniqueTours = new LinkedHashSet<>();
-        uniqueTours.addAll(contentBased);
-        uniqueTours.addAll(collaborative);
-        uniqueTours.addAll(popular);
-        return new ArrayList<>(uniqueTours);
+        uniqueTours.addAll(contentBased); // Ưu tiên content-based (click + từ khóa)
+        uniqueTours.addAll(collaborative); // Thêm collaborative (chỉ từ click)
+        return new ArrayList<>(uniqueTours).subList(0, Math.min(uniqueTours.size(), 15)); // Tăng giới hạn
+    }
+
+    @CacheEvict(value = "similarTours", key = "#user.id")
+    public void clearCache(User user) {
+        logger.info("Cleared recommendation cache for user: " + user.getEmail());
     }
 }

@@ -31,33 +31,37 @@ public class OtpController {
     // API gửi OTP
     @PostMapping("/send")
     public ResponseEntity<String> sendOtp(@RequestParam String email) {
+        System.out.println("Received resend OTP request for email: " + email);
         Optional<User> userOptional = userRepository.findByEmail(email);
-        if (userOptional.isEmpty()) return ResponseEntity.badRequest().body("User not found.");
-
-        User user = userOptional.get();
-        if (user.getStatus() != UserStatus.PENDING) {
-            return ResponseEntity.badRequest().body("Account is already activated.");
+        if (userOptional.isEmpty()) {
+            System.out.println("User not found for email: " + email);
+            return ResponseEntity.badRequest().body("User not found.");
         }
 
-        return mailService.sendOtpEmail(email) ?
-                ResponseEntity.ok("OTP has been sent to your email.") :
-                ResponseEntity.badRequest().body("OTP is still valid, please check your email.");
+        User user = userOptional.get();
+        System.out.println("User status: " + user.getStatus());
+        if (user.getStatus() != UserStatus.PENDING) {
+            System.out.println("Account is already activated for email: " + email);
+            return ResponseEntity.badRequest().body("Account is already activated. Please log in or reset your password.");
+        }
+
+        // Xóa OTP cũ trước khi gửi OTP mới
+        mailService.removeOtp(email);
+
+        boolean sent = mailService.sendOtpEmail(email);
+        if (sent) {
+            System.out.println("OTP sent successfully to email: " + email);
+            return ResponseEntity.ok("OTP has been sent to your email.");
+        } else {
+            System.out.println("Failed to send OTP to email: " + email);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to send OTP.");
+        }
     }
-
-
-//    @PostMapping("/send")
-//    public ResponseEntity<String> sendOtp(@RequestParam String email) {
-//        try {
-//            mailService.sendOtpEmail(email);
-//            return ResponseEntity.ok("OTP has been sent to your email.");
-//        } catch (Exception e) {
-//            return ResponseEntity.status(500).body("Error sending OTP: " + e.getMessage());
-//        }
-//    }
 
     // API kiểm tra OTP
     @PostMapping("/verify")
     public ResponseEntity<String> verifyOtp(@RequestParam String email, @RequestParam String otp) {
+        System.out.println("Verifying OTP: email=" + email + ", otp=" + otp);
         if (mailService.verifyOtp(email, otp)) {
             Optional<User> userOptional = userRepository.findByEmail(email);
             if (userOptional.isPresent()) {
@@ -73,6 +77,27 @@ public class OtpController {
         }
         return ResponseEntity.status(400).body("Invalid or expired OTP.");
     }
+
+    // API gửi OTP cho quên mật khẩu
+    @PostMapping("/send-forgot-password-otp")
+    public ResponseEntity<String> sendForgotPasswordOtp(@RequestParam String email) {
+        Optional<User> userOptional = userRepository.findByEmail(email);
+        if (!userOptional.isPresent()) {
+            return ResponseEntity.badRequest().body("Email not found.");
+        }
+
+        System.out.println("Removing old OTP for email: " + email);
+        mailService.removeOtp(email);
+
+        boolean otpSent = mailService.sendOtpEmail(email);
+        if (otpSent) {
+            return ResponseEntity.ok("OTP has been sent to your email.");
+        } else {
+            return ResponseEntity.badRequest().body("Unable to send OTP.");
+        }
+    }
+
+
 
 }
 

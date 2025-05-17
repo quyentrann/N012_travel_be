@@ -29,8 +29,8 @@ public class ReportController {
             @RequestParam String endDate) {
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalBookings = reportService.getTotalBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalBookings);
@@ -42,8 +42,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         double totalRevenue = reportService.calculateTotalRevenue(startDateTime, endDateTime);
         return ResponseEntity.ok(totalRevenue);
@@ -57,8 +57,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalCancelledBookings = reportService.calculateTotalCancelledBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalCancelledBookings);
@@ -72,8 +72,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalCancelledBookings = reportService.calculateTotalCompletedBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalCancelledBookings);
@@ -86,8 +86,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalCancelledBookings = reportService.calculateTotalConfirmedBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalCancelledBookings);
@@ -101,8 +101,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalCancelledBookings = reportService.calculateTotalPaidBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalCancelledBookings);
@@ -115,8 +115,8 @@ public class ReportController {
 
         // Chuyển đổi chuỗi ngày thành LocalDateTime
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime startDateTime = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime endDateTime = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime startDateTime = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime endDateTime = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         long totalCancelledBookings = reportService.calculateTotalProgressBookings(startDateTime, endDateTime);
         return ResponseEntity.ok(totalCancelledBookings);
@@ -124,13 +124,13 @@ public class ReportController {
 
 
     @GetMapping
-    public List<TourBookingDTO> getBookingsByDateRange(
+    public List<TourBookingDTOReport> getBookingsByDateRange(
             @RequestParam String startDate,
             @RequestParam String endDate
     ) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        LocalDateTime start = LocalDateTime.parse(startDate + " 00:00:00", formatter);
-        LocalDateTime end = LocalDateTime.parse(endDate + " 23:59:59", formatter);
+        LocalDateTime start = LocalDateTime.parse(startDate.trim() + " 00:00:00", formatter);
+        LocalDateTime end = LocalDateTime.parse(endDate.trim() + " 23:59:59", formatter);
 
         return reportService.getBookingsByDateRange(start, end);
     }
@@ -151,6 +151,15 @@ public class ReportController {
 //            ,@RequestParam(required = false) BookingStatus status
     ) {
         List<TourRevenueDTO> result = reportService.getTopTourRevenue(startDate, endDate);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/tour-revenue")
+    public ResponseEntity<?> getTourRevenue(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+    ) {
+       List<RevenueTourReport> result = reportService.getRevenueTourReport(startDate, endDate);
         return ResponseEntity.ok(result);
     }
 

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import vn.edu.iuh.fit.tourmanagement.enums.UserStatus;
 import vn.edu.iuh.fit.tourmanagement.models.User;
 
 import java.util.Optional;
@@ -16,5 +17,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 @EntityGraph(attributePaths = "customer")
 Optional<User> findByEmail(@Param("email") String email);
 
+    // Kiểm tra sự tồn tại của người dùng theo email
+    boolean existsByEmail(String email);
+
+    // Bạn có thể thêm các truy vấn khác theo yêu cầu, ví dụ:
+    @Query("SELECT u FROM User u WHERE u.email = :email AND u.status = :status")
+    Optional<User> findByEmailAndStatus(@Param("email") String email, @Param("status") UserStatus status);
 
 }

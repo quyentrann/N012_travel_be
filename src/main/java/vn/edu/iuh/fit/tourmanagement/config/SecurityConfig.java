@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(request -> {
                     CorsConfiguration config = new CorsConfiguration();
                     config.setAllowedOrigins(List.of("http://localhost:5173","http://localhost:3000"));
-                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                    config.setAllowedMethods(List.of("GET", "POST", "PUT","PATCH", "DELETE", "OPTIONS"));
                     config.setAllowedHeaders(List.of("*"));
                     config.setAllowCredentials(true);
                     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -58,7 +58,7 @@ public class SecurityConfig {
                                 .requestMatchers("api/tours/**").permitAll()
                                 .requestMatchers("api/customers/**").permitAll()
                                 .requestMatchers("api/bookings/**").permitAll()
-//                                .requestMatchers("/api/bookings/**").authenticated()
+                                .requestMatchers("/api/manage-bookings/**").permitAll()
                                 .requestMatchers("api/tour-details/**").permitAll()
                                 .requestMatchers("api/discounts/**").permitAll()
                                 .requestMatchers("api/employees/**").permitAll()
@@ -66,10 +66,27 @@ public class SecurityConfig {
                                 .requestMatchers("api/categories/**").permitAll()
                                 .requestMatchers("api/recommendations/**").permitAll()
                                 .requestMatchers("api/otp/**").permitAll()
-                                .requestMatchers("api/reports/**").permitAll()
 //                                .requestMatchers("api/user/**").permitAll()
                                 .requestMatchers("/api/bookings/history").authenticated()
-                                .anyRequest().authenticated()  // All other requests require authentication
+                                .requestMatchers("/api/schedules/**").permitAll()
+                                .requestMatchers("/api/categories/**").permitAll()
+                                .requestMatchers("/api/recommendations/**").permitAll()
+                                .requestMatchers("/api/otp/**").permitAll()
+                                .requestMatchers("/api/bookings/cancel/**").permitAll()
+                                .requestMatchers("/api/reviews/by-tour/**").permitAll()
+                                .requestMatchers("/api/payment/**").permitAll()
+                                .requestMatchers("/api/search-history/search").permitAll()
+                                .requestMatchers("/api/reviews/**").authenticated()
+                                .requestMatchers("/api/recommendations/me").authenticated()
+                                .requestMatchers("/api/recommendations/click/**").authenticated()
+                                .requestMatchers("/api/search-history/my-history").authenticated()
+                                .requestMatchers("/api/users/update-profile").authenticated()
+                                .requestMatchers("/api/users/upload-avatar").authenticated()
+                                .requestMatchers("/api/tour-favourites/**").authenticated()
+                                .requestMatchers("/api/reports/**").permitAll()
+                                .requestMatchers(HttpMethod.POST,"/api/tours/upload-tour").permitAll()
+                                .anyRequest().authenticated()
+
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())

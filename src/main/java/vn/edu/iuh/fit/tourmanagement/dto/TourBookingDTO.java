@@ -1,24 +1,21 @@
 package vn.edu.iuh.fit.tourmanagement.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 public class TourBookingDTO {
     private Long bookingId;
-    private int numberPeople;
-    private double totalPrice;
+    private Integer numberPeople;
+    private Double totalPrice;
     private LocalDateTime bookingDate;
+    private LocalDate departureDate;
     private String status;
-    private String tourName;
-    private String tourImage;
-    //thêm chi tiêt để hiển thị chi tiết customer và tour
-    private String customerName;
+    private TourDTO tour; // Thêm TourDTO
 }

@@ -9,19 +9,13 @@ import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
 import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 public interface TourBookingRepository extends JpaRepository<TourBooking, Long> {
 
     @Query("SELECT tb FROM TourBooking tb WHERE tb.customer.customerId = :customerId")
     List<TourBooking> findByCustomerId(@Param("customerId") Long customerId);
-
-    Optional<TourBooking> findByBookingId(Long bookingId);
-
 
 //    List<BookingHistory> findByTour_TourId(Long tourId);
 
@@ -74,4 +68,23 @@ public interface TourBookingRepository extends JpaRepository<TourBooking, Long> 
             @Param("end") LocalDateTime end,
             @Param("statuses") List<BookingStatus> statuses
     );
+
+    List<TourBooking> findByBookingDateBetweenAndStatusIn(LocalDateTime startDate, LocalDateTime endDate, List<BookingStatus> status);
+    @Query("SELECT DISTINCT tb.tour.tourId FROM TourBooking tb WHERE tb.bookingDate BETWEEN :startDate AND :endDate")
+    List<Long> findDistinctTourIdsByBookingDateBetween(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    @Query("SELECT COUNT(tb)\n" +
+            "    FROM TourBooking tb\n" +
+            "    WHERE tb.bookingDate BETWEEN :startDate AND :endDate\n" +
+            "      AND tb.tour.tourId = :tourId AND tb.status <> 'CANCELED' AND tb.status <> 'CONFIRMED' ")
+    int countByBookingDateBetweenAndTour_TourId(LocalDateTime startDate, LocalDateTime endDate, Long tourId);
+    @Query("SELECT SUM(tb.totalPrice) FROM TourBooking tb WHERE tb.bookingDate BETWEEN :startDate AND :endDate AND tb.tour.tourId = :tourId AND tb.status <> 'CANCELED' AND tb.status <> 'CONFIRMED' ")
+    Double getTotalRevenueByDateAndTourId(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("tourId") Long tourId
+    );
+
 }

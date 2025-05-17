@@ -1,18 +1,31 @@
 package vn.edu.iuh.fit.tourmanagement.controllers;
 
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import vn.edu.iuh.fit.tourmanagement.models.Customer;
 import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.services.AuthService;
 import vn.edu.iuh.fit.tourmanagement.services.UserService;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/users")
@@ -23,7 +36,8 @@ public class UserController {
     @Autowired
     private AuthService authService;
 
-
+    @Autowired
+    private Cloudinary cloudinary;
     // Lấy tất cả người dùng
     @GetMapping
     public ResponseEntity<List<User>> getAllUsers() {
@@ -45,17 +59,25 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<User> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String email = authentication.getName(); // Lấy email từ token
+    public ResponseEntity<User> getCurrentUser(HttpServletResponse response) {
+        try {
+            // Ngăn cache
+            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.setHeader("Pragma", "no-cache");
+            response.setDateHeader("Expires", 0);
 
-        User user = userService.getUserByEmail(email); // Hàm này cần implement
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            User user = userService.getUserByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            }
+            System.out.println("User data sent: " + user); // Debug
+            return ResponseEntity.ok(user);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        return ResponseEntity.ok(user);
     }
-
     // Tạo người dùng mới
     @PostMapping
     public ResponseEntity<User> createUser(@RequestBody User user) {
@@ -77,6 +99,92 @@ public class UserController {
         user.setId(id);
         User updatedUser = userService.updateUser(user);
         return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+    }
+
+    @PutMapping("/update-profile")
+    public ResponseEntity<?> updateProfile(@RequestBody Map<String, Object> updates) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+
+            User user = userService.getUserByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Không tìm thấy người dùng!");
+            }
+
+            Customer customer = user.getCustomer();
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Không tìm thấy thông tin khách hàng!");
+            }
+
+            // Cập nhật các trường của Customer
+            if (updates.containsKey("fullName")) {
+                customer.setFullName((String) updates.get("fullName"));
+            }
+            if (updates.containsKey("phoneNumber")) {
+                customer.setPhoneNumber((String) updates.get("phoneNumber"));
+            }
+            if (updates.containsKey("address")) {
+                customer.setAddress((String) updates.get("address"));
+            }
+            if (updates.containsKey("dob") && updates.get("dob") != null) {
+                String dobString = (String) updates.get("dob");
+                if (!dobString.isEmpty()) {
+                    customer.setDob(LocalDate.parse(dobString));
+                }
+            }
+            if (updates.containsKey("gender") && updates.get("gender") != null) {
+                customer.setGender(Boolean.parseBoolean(updates.get("gender").toString()));
+            }
+
+            // Cập nhật email của User (nếu có)
+            if (updates.containsKey("email")) {
+                String newEmail = (String) updates.get("email");
+                if (userService.existsByEmail(newEmail) && !newEmail.equals(email)) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Email đã được sử dụng!");
+                }
+                user.setEmail(newEmail);
+            }
+
+            User updatedUser = userService.updateUser(user);
+            return ResponseEntity.ok(updatedUser);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Cập nhật hồ sơ thất bại: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/upload-avatar")
+    public ResponseEntity<?> uploadAvatar(@RequestParam("avatar") MultipartFile file) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            User user = userService.getUserByEmail(email);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Không tìm thấy người dùng!");
+            }
+            Customer customer = user.getCustomer();
+            if (customer == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Không tìm thấy thông tin khách hàng!");
+            }
+
+            // Tải lên Cloudinary
+            String fileName = "avatars/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
+            Map uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap(
+                    "public_id", fileName,
+                    "overwrite", true,
+                    "resource_type", "image"
+            ));
+            String avatarUrl = (String) uploadResult.get("secure_url");
+
+            customer.setAvatarUrl(avatarUrl);
+            userService.updateUser(user);
+
+            Map<String, String> response = new HashMap<>();
+            response.put("avatarUrl", avatarUrl);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Tải ảnh thất bại: " + e.getMessage());
+        }
     }
 
     // Xóa người dùng (đánh dấu là đã xóa)

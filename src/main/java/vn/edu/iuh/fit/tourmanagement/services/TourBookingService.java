@@ -4,12 +4,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDTO;
+import vn.edu.iuh.fit.tourmanagement.dto.CancelResponse;
+import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDetailDTO;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.*;
 import vn.edu.iuh.fit.tourmanagement.repositories.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -33,6 +35,13 @@ public class TourBookingService {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private MailService mailService; // Thêm MailService vào
+
+    public TourBookingService(TourBookingRepository tourBookingRepository) {
+        this.tourBookingRepository = tourBookingRepository;
+    }
+
     public List<TourBooking> getListTourBooking() {
         return tourBookingRepository.findAll();
     }
@@ -41,124 +50,255 @@ public class TourBookingService {
         return tourBookingRepository.findByCustomerId(customerId);
     }
 
-    public Optional<TourBooking> getTourBookingById(Long id) {
-        return tourBookingRepository.findById(id);
+    public TourBooking getTourBookingById(Long id) {
+        return tourBookingRepository.findById(id).orElse(null);
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {
-        // Lấy thông tin User từ Authentication
         User user = (User) authentication.getPrincipal();
-
-        // Kiểm tra xem user có customer không
+        int adults = bookingRequest.getNumberAdults();
+        int children = bookingRequest.getNumberChildren();
+        int infants = bookingRequest.getNumberInfants();
         if (user.getCustomer() == null) {
             throw new Exception("User is not a customer");
         }
 
-        // Lấy Customer từ User
         Customer customer = user.getCustomer();
 
-        // Lấy thông tin tour
+        if (bookingRequest.getFullName() != null) {
+            customer.setFullName(bookingRequest.getFullName());
+        }
+        if (bookingRequest.getPhoneNumber() != null) {
+            customer.setPhoneNumber(bookingRequest.getPhoneNumber());
+        }
+        customerRepository.save(customer);
+
         Tour tour = tourRepository.findById(bookingRequest.getTourId())
                 .orElseThrow(() -> new Exception("Tour not found"));
 
-        // Kiểm tra số lượng slot
         if (tour.getAvailableSlot() < bookingRequest.getNumberPeople()) {
             throw new Exception("Not enough available slots");
         }
 
-        // Tính tổng giá
-        double totalPrice = bookingRequest.getTotalPrice();
+        int totalParticipants = adults + children + infants;
+        if (totalParticipants != bookingRequest.getNumberPeople()) {
+            throw new Exception("Total number of adults, children, and infants does not match numberPeople");
+        }
 
-        // Tạo đối tượng TourBooking
+        // Kiểm tra ngày khởi hành hợp lệ
+        LocalDate departureDate = bookingRequest.getDepartureDate();
+        if (departureDate == null) {
+            throw new Exception("Departure date is required");
+        }
+        boolean validDepartureDate = tour.getTourDetails().stream()
+                .anyMatch(detail -> detail.getStartDate().equals(departureDate));
+        if (!validDepartureDate) {
+            throw new Exception("Invalid departure date for this tour");
+        }
+
+        // Tạo booking
         TourBooking booking = TourBooking.builder()
                 .customer(customer)
                 .tour(tour)
                 .numberPeople(bookingRequest.getNumberPeople())
-                .totalPrice(totalPrice)
+                .totalPrice(bookingRequest.getTotalPrice())
                 .bookingDate(LocalDateTime.now())
+                .departureDate(departureDate) // Lưu departureDate
                 .status(BookingStatus.CONFIRMED)
+                .numberAdults(adults)
+                .numberChildren(children)
+                .numberInfants(infants)
                 .build();
 
-        // Lưu thông tin booking vào DB
         TourBooking savedBooking = tourBookingRepository.save(booking);
 
-        // Cập nhật số lượng slot còn lại của tour
         tour.setAvailableSlot(tour.getAvailableSlot() - bookingRequest.getNumberPeople());
         tourRepository.save(tour);
+
+        try {
+            String departureLocation = tour.getLocation();
+            String departureDateStr = departureDate.toString();
+
+            String paymentDeadline = booking.getBookingDate().plusDays(3).toString();
+
+            mailService.sendBookingConfirmationEmail(
+                    user.getEmail(),
+                    customer.getFullName(),
+                    tour.getName(),
+                    departureLocation,
+                    departureDateStr,
+                    bookingRequest.getNumberPeople(),
+                    bookingRequest.getTotalPrice(),
+                    paymentDeadline
+            );
+        } catch (Exception e) {
+            System.err.println("Lỗi khi gửi email xác nhận: " + e.getMessage());
+        }
 
         return savedBooking;
     }
 
 
-
+    //Hủy tour
     @Transactional
-    public void cancelBooking(Long bookingId, String reason) {
+    public CancelResponse cancelBooking(Long bookingId, String reason, LocalDateTime cancelDate, boolean isHoliday, Authentication authentication) {
+        // Kiểm tra quyền
+        User user = (User) authentication.getPrincipal();
         TourBooking booking = tourBookingRepository.findById(bookingId)
                 .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking"));
-
-        if (booking.getStatus() == BookingStatus.CANCELED) {
-            throw new IllegalStateException("Booking đã bị hủy trước đó");
+        if (user.getCustomer() == null || !booking.getCustomer().getCustomerId().equals(user.getCustomer().getCustomerId())) {
+            throw new IllegalStateException("Bạn không có quyền hủy booking này.");
         }
 
-        // Ghi nhận lịch sử hủy
-        bookingHistoryRepository.save(BookingHistory.builder()
+        // Kiểm tra trạng thái
+        if (booking.getStatus() == BookingStatus.CANCELED ||
+                booking.getStatus() == BookingStatus.COMPLETED ||
+                booking.getStatus() == BookingStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Không thể hủy booking với trạng thái hiện tại: " + booking.getStatus());
+        }
+
+        // Kiểm tra cancelDate
+        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay();
+        if (cancelDate.isAfter(LocalDateTime.now()) || cancelDate.isAfter(tourStartDate)) {
+            throw new IllegalArgumentException("Ngày hủy không hợp lệ. Ngày hủy phải trước thời điểm hiện tại và ngày khởi hành của tour.");
+        }
+
+        // Tính phí hủy
+        double cancellationFee = 0;
+        double refundAmount = 0;
+        if (booking.getStatus() == BookingStatus.PAID) {
+            cancellationFee = calculateCancellationFee(booking, cancelDate, isHoliday);
+            refundAmount = booking.getTotalPrice() - cancellationFee;
+        }
+
+        // Lưu lịch sử hủy
+        BookingHistory history = BookingHistory.builder()
                 .booking(booking)
                 .oldStatus(booking.getStatus())
                 .newStatus(BookingStatus.CANCELED)
                 .changeDate(LocalDateTime.now())
+                .cancelDate(cancelDate)
                 .reason(reason)
-                .build());
+                .cancellationFee(cancellationFee)
+                .refundAmount(refundAmount)
+                .tour(booking.getTour())
+                .isHoliday(isHoliday)
+                .build();
+        bookingHistoryRepository.save(history);
 
         // Cập nhật trạng thái booking
         booking.setStatus(BookingStatus.CANCELED);
         tourBookingRepository.save(booking);
+
+        // Cập nhật slot tour
+        Tour tour = booking.getTour();
+        tour.setAvailableSlot(tour.getAvailableSlot() + booking.getNumberPeople());
+        tourRepository.save(tour);
+
+        // Gửi email xác nhận hủy
+        try {
+            mailService.sendCancellationConfirmationEmail(
+                    user.getEmail(),
+                    booking.getCustomer().getFullName(),
+                    tour.getName(),
+                    reason,
+                    cancellationFee,
+                    refundAmount
+            );
+        } catch (Exception e) {
+            System.err.println("Lỗi khi gửi email hủy: " + e.getMessage());
+        }
+
+        // Trả về kết quả
+        CancelResponse response = new CancelResponse();
+        response.setMessage("Booking đã được hủy thành công!");
+        response.setCancellationFee(cancellationFee);
+        response.setRefundAmount(refundAmount);
+        return response;
     }
+
+
+
+
+
+    // Hàm tính phí hủy
+    private double calculateCancellationFee(TourBooking booking, LocalDateTime cancelDate, boolean isHoliday) {
+        // Kiểm tra tourDetails
+        if (booking.getTour().getTourDetails() == null || booking.getTour().getTourDetails().isEmpty()) {
+            throw new IllegalStateException("Tour không có thông tin chi tiết về ngày khởi hành.");
+        }
+
+        LocalDateTime tourStartDate = booking.getTour().getTourDetails().get(0).getStartDate().atStartOfDay();
+        long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(cancelDate, tourStartDate);
+
+        double cancellationFee = 0;
+        if (isHoliday) {
+            if (daysBeforeTour >= 30) {
+                cancellationFee = 0.2 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 15) {
+                cancellationFee = 0.4 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 7) {
+                cancellationFee = 0.6 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 3) {
+                cancellationFee = 0.8 * booking.getTotalPrice();
+            } else {
+                cancellationFee = booking.getTotalPrice();
+            }
+        } else {
+            if (daysBeforeTour >= 14) {
+                cancellationFee = 0.1 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 7) {
+                cancellationFee = 0.3 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 4) {
+                cancellationFee = 0.5 * booking.getTotalPrice();
+            } else if (daysBeforeTour >= 1) {
+                cancellationFee = 0.7 * booking.getTotalPrice();
+            } else {
+                cancellationFee = booking.getTotalPrice();
+            }
+        }
+
+        return cancellationFee;
+    }
+    public Optional<TourBooking> getBookingById(Long id) {
+        return tourBookingRepository.findById(id);
+    }
+
+    public TourBooking updateBooking(TourBooking booking) {
+        return tourBookingRepository.save(booking);
+    }
+
+    public TourBookingDetailDTO getTourBookingDetailById(Long bookingId) {
+        TourBooking booking = tourBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Booking not found"));
+
+        // Tạo TourBookingDetailDTO từ TourBooking
+        return new TourBookingDetailDTO(booking);
+    }
+
+    public void updatePaymentStatus(Long bookingId, boolean isSuccess) {
+        TourBooking booking = tourBookingRepository.findById(bookingId)
+                .orElseThrow(() -> new NoSuchElementException("Booking không tồn tại"));
+
+        if (isSuccess) {
+            if (booking.getStatus() != BookingStatus.PAID) {
+                booking.setStatus(BookingStatus.PAID);
+                tourBookingRepository.save(booking);
+            } else {
+                throw new IllegalStateException("Booking đã được thanh toán.");
+            }
+        } else {
+            if (booking.getStatus() != BookingStatus.CANCELED) {
+                booking.setStatus(BookingStatus.CANCELED);
+                tourBookingRepository.save(booking);
+            } else {
+                throw new IllegalStateException("Booking đã bị hủy.");
+            }
+        }
+    }
+
 
     public List<BookingHistory> getBookingHistory(Long bookingId) {
         return bookingHistoryRepository.findByTour_TourId(bookingId);
-    }
-
-    // lấy customer theo bookingid
-    public Optional<Customer> getCustomerByBookingId(Long bookingId) {
-        Optional<TourBooking> booking = tourBookingRepository.findByBookingId(bookingId);
-        if (booking.isPresent()) {
-            return Optional.ofNullable(booking.get().getCustomer());
-        } else {
-            return Optional.empty();
-        }
-    }
-    public Optional<Tour> getTourByBookingId(Long bookingId) {
-        Optional<TourBooking> booking = tourBookingRepository.findByBookingId(bookingId);
-        if (booking.isPresent()) {
-            return Optional.ofNullable(booking.get().getTour());
-        } else {
-            return Optional.empty();
-        }
-    }
-    public List<TourBookingDTO> getAllBookings() {
-        List<TourBooking> bookings = tourBookingRepository.findAll();
-
-        return bookings.stream().map(booking -> {
-            // Lấy thông tin Customer và Tour
-            String customerName = booking.getCustomer().getFullName();  // Giả sử Customer có trường 'name'
-            String tourName = booking.getTour().getName();  // Giả sử Tour có trường 'name'
-
-            return new TourBookingDTO(
-                    booking.getBookingId(),
-                    booking.getNumberPeople(),
-                    booking.getTotalPrice(),
-                    booking.getBookingDate(),
-                    booking.getStatus().toString(),
-                    booking.getTour().getName(),
-                    booking.getTour().getImageURL(),
-                    booking.getCustomer().getFullName()
-            );
-        }).collect(Collectors.toList());
-    }
-
-    public String getTourNameByBookingId(Long bookingId) {
-        return tourBookingRepository.findById(bookingId)
-                .map(booking -> booking.getTour().getName())
-                .orElse(null);
     }
 }

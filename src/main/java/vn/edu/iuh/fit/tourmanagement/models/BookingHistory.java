@@ -35,11 +35,24 @@ public class BookingHistory {
     @Column(name = "change_date", nullable = false)
     private LocalDateTime changeDate = LocalDateTime.now();
 
+    @Column(name = "cancel_date")
+    private LocalDateTime cancelDate;
+
     @Column(name = "reason", columnDefinition = "TEXT")
     private String reason;
 
     @ManyToOne
     @JoinColumn(name = "tour_id")
     private Tour tour;
+
+
+    @Column(name = "cancellation_fee")
+    private double cancellationFee; // Thêm phí hủy
+
+    @Column(name = "refund_amount")
+    private double refundAmount; // Thêm số tiền hoàn lại
+
+    @Column(name = "is_holiday")
+    private boolean isHoliday;
 
 }

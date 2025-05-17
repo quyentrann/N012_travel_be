@@ -1,8 +1,8 @@
 package vn.edu.iuh.fit.tourmanagement.models;
+
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
@@ -27,7 +27,6 @@ public class TourBooking {
 
     @ManyToOne
     @JoinColumn(name = "customer_id", nullable = false)
-//    @JsonManagedReference
     @JsonIgnore
     private Customer customer;
 
@@ -45,6 +44,9 @@ public class TourBooking {
     @Column(name = "booking_date")
     private LocalDateTime bookingDate;
 
+    @Column(name = "departure_date")
+    private LocalDate departureDate; // Thêm trường này
+
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private BookingStatus status;
@@ -53,4 +55,12 @@ public class TourBooking {
     @JoinColumn(name = "discount_id")
     private Discount discount;
 
+    @Column(name = "number_adults", nullable = false)
+    private int numberAdults;
+
+    @Column(name = "number_children", nullable = false)
+    private int numberChildren;
+
+    @Column(name = "number_infants", nullable = false)
+    private int numberInfants;
 }

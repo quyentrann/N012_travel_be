@@ -14,10 +14,11 @@ public class CorsConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
                         .allowedOrigins("http://localhost:5173","http://localhost:3000", "https://de-smba.onrender.com") // Địa chỉ của frontend
-                        .allowedMethods("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS")
+                        .allowedMethods("GET", "POST", "PUT","PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
-                        .allowCredentials(true); // Nếu sử dụng cookie/token
-                System.out.println("🔥 CORS Config Loaded!"); // Debug log
+                        .allowCredentials(true);  // Nếu bạn sử dụng cookie/tokens
+              System.out.println("🔥 CORS Config Loaded!"); // Debug log
+
             }
         };
     }
