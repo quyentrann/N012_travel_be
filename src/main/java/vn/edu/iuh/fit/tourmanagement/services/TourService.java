@@ -15,6 +15,8 @@ import vn.edu.iuh.fit.tourmanagement.models.Review;
 import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
+import vn.edu.iuh.fit.tourmanagement.repositories.SearchHistoryRepository;
+import vn.edu.iuh.fit.tourmanagement.repositories.TourCategoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
 import java.text.Normalizer;
