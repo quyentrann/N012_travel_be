@@ -9,44 +9,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import vn.edu.iuh.fit.tourmanagement.models.Review;
+import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.TourDetail;
+import vn.edu.iuh.fit.tourmanagement.repositories.SearchHistoryRepository;
 import vn.edu.iuh.fit.tourmanagement.repositories.TourRepository;
 
 import java.text.Normalizer;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-// Inner class thay cho record
-class TourScore {
-    private final Tour tour;
-    private final double score;
-
-    public TourScore(Tour tour, double score) {
-        this.tour = tour;
-        this.score = score;
-    }
-
-    public Tour getTour() {
-        return tour;
-    }
-
-    public double getScore() {
-        return score;
-    }
-}
 
 @Service
 public class TourService {
     private static final Logger logger = Logger.getLogger(TourService.class.getName());
     @Autowired
     private TourRepository tourRepository;
+
+    @Autowired
+    private SearchHistoryRepository searchHistoryRepository;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -135,7 +118,7 @@ public class TourService {
         });
     }
 
-    public List<Tour> searchTours(String query) {
+    public List<Tour> searchTours(String query, boolean random) {
         if (query == null || query.trim().isEmpty()) {
             logger.info("Empty query, returning empty list");
             return List.of();
@@ -151,7 +134,14 @@ public class TourService {
             return List.of();
         }
 
-        return allTours.stream()
+        Map<Long, Integer> tourClickCounts = searchHistoryRepository.findAll().stream()
+                .filter(sh -> sh.getTour() != null)
+                .collect(Collectors.groupingBy(
+                        sh -> sh.getTour().getTourId(),
+                        Collectors.summingInt(SearchHistory::getClickCount)
+                ));
+
+        List<TourScore> scoredTours = allTours.stream()
                 .map(tour -> {
                     String name = tour.getName() != null ? tour.getName() : "";
                     String location = tour.getLocation() != null ? tour.getLocation() : "";
@@ -170,55 +160,192 @@ public class TourService {
 
                     double score = 0.0;
 
-                    // Kiểm tra khớp cụm từ đầy đủ (có dấu hoặc không dấu)
                     if (cleanedLocation.toLowerCase().contains(cleanedQuery.toLowerCase()) ||
                             normalizedLocation.contains(normalizedQuery)) {
-                        score += 3.0 * 3.0;
-                        logger.info("Matched full query in location: " + location + ", score: " + score);
+                        score += 3.0;
                     }
                     if (cleanedName.toLowerCase().contains(cleanedQuery.toLowerCase()) ||
                             normalizedName.contains(normalizedQuery)) {
-                        score += 1.5 * 3.0;
-                        logger.info("Matched full query in name: " + name + ", score: " + score);
+                        score += 1.5;
                     }
                     if (cleanedDescription.toLowerCase().contains(cleanedQuery.toLowerCase()) ||
                             normalizedDescription.contains(normalizedQuery)) {
-                        score += 0.8 * 3.0;
-                        logger.info("Matched full query in description: " + description + ", score: " + score);
+                        score += 0.8;
                     }
                     if (cleanedCategory.toLowerCase().contains(cleanedQuery.toLowerCase()) ||
                             normalizedCategory.contains(normalizedQuery)) {
-                        score += 1.0 * 3.0;
-                        logger.info("Matched full query in category: " + category + ", score: " + score);
+                        score += 1.0;
                     }
 
-                    return new TourScore(tour, score); // Dùng inner class
+                    int clickCount = tourClickCounts.getOrDefault(tour.getTourId(), 0);
+                    score += clickCount * 0.5;
+
+                    Optional<LocalDate> nearestStartDate = tour.getTourDetails().stream()
+                            .map(TourDetail::getStartDate)
+                            .filter(date -> !date.isBefore(LocalDate.now()))
+                            .min(Comparator.naturalOrder());
+                    if (nearestStartDate.isPresent()) {
+                        long daysUntilStart = java.time.Duration.between(LocalDate.now().atStartOfDay(), nearestStartDate.get().atStartOfDay()).toDays();
+                        score += (30.0 / (daysUntilStart + 1));
+                    }
+
+                    return new TourScore(tour, score, query);
                 })
                 .filter(tourScore -> tourScore.getScore() > 0.5)
+                .collect(Collectors.toList());
+
+        if (random) {
+            Collections.shuffle(scoredTours);
+            return scoredTours.stream()
+                    .map(TourScore::getTour)
+                    .limit(10)
+                    .collect(Collectors.toList());
+        }
+
+        return scoredTours.stream()
                 .sorted((a, b) -> Double.compare(b.getScore(), a.getScore()))
                 .map(TourScore::getTour)
+                .limit(10)
                 .collect(Collectors.toList());
     }
 
-    private String normalizeString(String input) {
-        if (input == null) {
-            return "";
+    public List<Tour> searchToursWithTFIDF(String query, boolean random) {
+        if (query == null || query.trim().isEmpty()) {
+            logger.info("Empty query, returning empty list");
+            return List.of();
         }
-        String normalized = input.toLowerCase()
-                .replace(",", " ")
-                .replace(".", " ")
-                .replace("-", " ")
-                .replaceAll("[^a-zA-Z0-9\\s]", " ") // Loại bỏ ký tự đặc biệt ngoài chữ và số
-                .replaceAll("\\s+", " ");
+
+        String originalQuery = query.trim().toLowerCase();
+        String normalizedQuery = normalizeString(originalQuery);
+        logger.info("Original query: " + originalQuery + ", Normalized query for TF-IDF: " + normalizedQuery);
+
+        List<Tour> allTours = tourRepository.findAll();
+        if (allTours.isEmpty()) {
+            logger.warning("No tours found in repository");
+            return List.of();
+        }
+
+        Map<String, Integer> docFrequency = new HashMap<>();
+        Map<Tour, Map<String, Double>> tfVectors = new HashMap<>();
+
+        for (Tour tour : allTours) {
+            String text = (tour.getName() != null ? tour.getName() : "") + " " +
+                    (tour.getDescription() != null ? tour.getDescription() : "") + " " +
+                    (tour.getLocation() != null ? tour.getLocation() : "") + " " +
+                    (tour.getTourcategory() != null && tour.getTourcategory().getCategoryName() != null ? tour.getTourcategory().getCategoryName() : "");
+            text = normalizeString(text.toLowerCase());
+            String[] words = text.split("\\s+");
+            Map<String, Integer> termFreq = new HashMap<>();
+            for (String word : words) {
+                if (!word.isEmpty()) {
+                    termFreq.put(word, termFreq.getOrDefault(word, 0) + 1);
+                    docFrequency.put(word, docFrequency.getOrDefault(word, 0) + 1);
+                }
+            }
+
+            Map<String, Double> tfVector = new HashMap<>();
+            for (String word : termFreq.keySet()) {
+                double tf = (double) termFreq.get(word) / Math.max(words.length, 1);
+                tfVector.put(word, tf);
+            }
+            tfVectors.put(tour, tfVector);
+        }
+
+        String[] queryWords = normalizedQuery.split("\\s+");
+        Map<String, Double> queryVector = new HashMap<>();
+        Map<String, Integer> queryFreq = new HashMap<>();
+        for (String word : queryWords) {
+            if (!word.isEmpty()) queryFreq.put(word, queryFreq.getOrDefault(word, 0) + 1);
+        }
+        for (String word : queryFreq.keySet()) {
+            double tf = (double) queryFreq.get(word) / Math.max(queryWords.length, 1);
+            double idf = Math.log((double) allTours.size() / (docFrequency.getOrDefault(word, 1) + 1));
+            queryVector.put(word, tf * idf);
+        }
+
+        Map<Long, Integer> tourClickCounts = searchHistoryRepository.findAll().stream()
+                .filter(sh -> sh.getTour() != null)
+                .collect(Collectors.groupingBy(sh -> sh.getTour().getTourId(), Collectors.summingInt(SearchHistory::getClickCount)));
+
+        List<TourScore> scores = new ArrayList<>();
+        for (Tour tour : allTours) {
+            Map<String, Double> tourVector = tfVectors.get(tour);
+            double dotProduct = 0.0, normQuery = 0.0, normTour = 0.0;
+
+            for (String word : queryVector.keySet()) {
+                double queryTfIdf = queryVector.get(word);
+                double tourTf = tourVector.getOrDefault(word, 0.0);
+                dotProduct += queryTfIdf * tourTf;
+                normQuery += queryTfIdf * queryTfIdf;
+                normTour += tourTf * tourTf;
+            }
+
+            double similarity = dotProduct / (Math.sqrt(normQuery) * Math.sqrt(normTour) + 1e-10);
+            double score = similarity * 30.0;
+
+            int clickCount = tourClickCounts.getOrDefault(tour.getTourId(), 0);
+            score += clickCount * 0.5;
+
+            Optional<LocalDate> nearestStartDate = tour.getTourDetails().stream()
+                    .map(TourDetail::getStartDate)
+                    .filter(date -> !date.isBefore(LocalDate.now()))
+                    .min(Comparator.naturalOrder());
+            if (nearestStartDate.isPresent()) {
+                long daysUntilStart = java.time.Duration.between(LocalDate.now().atStartOfDay(), nearestStartDate.get().atStartOfDay()).toDays();
+                score += 30.0 / (daysUntilStart + 1);
+            }
+
+            String tourText = (tour.getName() != null ? tour.getName().toLowerCase() : "") + " " +
+                    (tour.getDescription() != null ? tour.getDescription().toLowerCase() : "") + " " +
+                    (tour.getLocation() != null ? tour.getLocation().toLowerCase() : "");
+            if (tourText.contains(originalQuery)) {
+                score += 5.0;
+                logger.info("Tour ID: " + tour.getTourId() + " matches original query: " + originalQuery);
+            }
+            if (tour.getLocation() != null && tour.getLocation().toLowerCase().contains(originalQuery)) {
+                score += 10.0;
+                logger.info("Tour ID: " + tour.getTourId() + " matches location: " + originalQuery);
+            }
+            if (tour.getName() != null && tour.getName().toLowerCase().contains(originalQuery)) {
+                score += 7.0;
+                logger.info("Tour ID: " + tour.getTourId() + " matches name: " + originalQuery);
+            }
+
+            logger.info("Tour ID: " + tour.getTourId() + ", Name: " + tour.getName() + ", TF-IDF Score: " + score);
+            scores.add(new TourScore(tour, score, originalQuery));
+        }
+
+        List<TourScore> filteredScores = scores.stream()
+                .filter(s -> s.getScore() > 0.0001)
+                .collect(Collectors.toList());
+
+        if (filteredScores.isEmpty()) {
+            logger.warning("No tours passed score threshold for query: " + originalQuery);
+        }
+
+        if (random) Collections.shuffle(filteredScores);
+        else filteredScores.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+
+        List<Tour> result = filteredScores.stream()
+                .map(TourScore::getTour)
+                .limit(10)
+                .collect(Collectors.toList());
+        logger.info("Returning " + result.size() + " tours for query: " + normalizedQuery);
+        result.forEach(tour -> logger.info("Result Tour ID: " + tour.getTourId() + ", Name: " + tour.getName()));
+        return result;
+    }
+
+    private String normalizeString(String input) {
+        if (input == null) return "";
+        // Chuẩn hóa dấu tiếng Việt
+        String normalized = Normalizer.normalize(input.toLowerCase(), Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{M}", ""); // Xóa dấu thanh
         normalized = normalized
-                .replaceAll("[àáạảãâầấậẩẫăằắặẳẵ]", "a")
-                .replaceAll("[èéẹẻẽêềếệểễ]", "e")
-                .replaceAll("[ìíịỉĩ]", "i")
-                .replaceAll("[òóọỏõôồốộổỗơờớợởỡ]", "o")
-                .replaceAll("[ùúụủũưừứựửữ]", "u")
-                .replaceAll("[ỳýỵỷỹ]", "y")
-                .replaceAll("đ", "d");
-        return normalized.trim();
+                .replace("đ", "d")
+                .replaceAll("[^a-z0-9\\s]", " ") // Xóa ký tự đặc biệt, giữ chữ và số
+                .replaceAll("\\s+", " ") // Chuẩn hóa khoảng trắng
+                .trim();
+        return normalized;
     }
 
     private String cleanText(String input) {
@@ -247,21 +374,15 @@ public class TourService {
     }
 
     public List<Tour> getToursByDateRange(LocalDate startDate, LocalDate endDate) {
-        // Lấy tất cả các tour
         List<Tour> tours = tourRepository.findAll();
-
-        // Nếu startDate và endDate đều không null, thì lọc các tour theo thời gian
         if (startDate != null && endDate != null) {
             return tours.stream()
                     .filter(tour -> tour.getTourDetails().stream()
                             .anyMatch(detail -> !detail.getEndDate().isBefore(startDate) && !detail.getStartDate().isAfter(endDate)))
                     .collect(Collectors.toList());
         }
-
-        // Nếu chỉ có một trong các tham số, xử lý theo điều kiện phù hợp
-        return tours;  // Hoặc có thể lọc thêm tùy theo yêu cầu của bạn
+        return tours;
     }
-
 
     public List<Tour> filterToursByTime(LocalDate startDate, LocalDate endDate) {
         return tourRepository.findToursByTimeRange(startDate, endDate);
@@ -274,6 +395,4 @@ public class TourService {
     public List<Tour> filterToursByMonth(LocalDate startOfMonth, LocalDate endOfMonth) {
         return tourRepository.findByTourDetailsStartDateBetweenOrTourDetailsEndDateBetween(startOfMonth, endOfMonth, startOfMonth, endOfMonth);
     }
-
-
 }

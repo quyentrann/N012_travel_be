@@ -3,6 +3,7 @@ package vn.edu.iuh.fit.tourmanagement.repositories;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
 import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 
@@ -19,6 +20,8 @@ public interface TourBookingRepository extends JpaRepository<TourBooking, Long> 
     Optional<TourBooking> findById(Long id);
 
 //    List<BookingHistory> findByTour_TourId(Long tourId);
+List<TourBooking> findByStatus(BookingStatus status);
 
+    List<TourBooking> findByCustomerCustomerIdAndStatus(@Param("customerId") Long customerId, @Param("status") BookingStatus status);
 
 }

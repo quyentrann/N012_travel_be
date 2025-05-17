@@ -346,11 +346,11 @@ public class TourController {
     }
 
     // Tìm kiếm các tour theo từ khóa trong tên tour hoặc mô tả
-    @GetMapping("/search")
-    public ResponseEntity<List<Tour>> search(@RequestParam String keyword) {
-        List<Tour> tours = tourService.searchTours(keyword);
-        return ResponseEntity.ok(tours);
-    }
+//    @GetMapping("/search")
+//    public ResponseEntity<List<Tour>> search(@RequestParam String keyword) {
+//        List<Tour> tours = tourService.searchTours(keyword);
+//        return ResponseEntity.ok(tours);
+//    }
 
     // API lấy danh sách tour theo loại
     @GetMapping("/category/{categoryId}")

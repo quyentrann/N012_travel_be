@@ -270,4 +270,113 @@ public class TourBookingController {
         }
     }
 
+    @GetMapping("/pending-payment")
+    public ResponseEntity<List<TourBookingDTO>> getPendingPaymentBookings(Authentication authentication) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<TourBooking> bookings = tourBookingRepository.findByCustomerCustomerIdAndStatus(user.getCustomer().getCustomerId(), BookingStatus.CONFIRMED)
+                .stream()
+                .filter(booking -> now.isBefore(booking.getBookingDate().plusDays(3)))
+                .collect(Collectors.toList());
+
+        List<TourBookingDTO> bookingDTOs = bookings.stream().map(booking -> {
+            Tour tour = booking.getTour();
+            TourDTO tourDTO = new TourDTO(
+                    tour.getTourId(),
+                    tour.getName(),
+                    tour.getPrice(),
+                    tour.getAvailableSlot(),
+                    tour.getLocation(),
+                    tour.getDescription(),
+                    tour.getHighlights(),
+                    tour.getImageURL(),
+                    tour.getExperiences(),
+                    tour.getStatus() != null ? tour.getStatus().toString() : null,
+                    tour.getTourcategory() != null ? new TourCategoryDTO(
+                            tour.getTourcategory().getCategoryId(),
+                            tour.getTourcategory().getCategoryName(),
+                            tour.getTourcategory().getDescription()
+                    ) : null,
+                    tour.getTourDetails() != null ? tour.getTourDetails().stream().map(TourDetailDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    tour.getTourSchedules() != null ? tour.getTourSchedules().stream().map(TourScheduleDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    tour.getReviews() != null ? tour.getReviews().stream().map(ReviewDTO::new).collect(Collectors.toList()) : Collections.emptyList(),
+                    Collections.emptyList() // Tránh fetch bookings để tối ưu hiệu suất
+            );
+            return new TourBookingDTO(
+                    booking.getBookingId(),
+                    booking.getNumberPeople(),
+                    booking.getTotalPrice(),
+                    booking.getBookingDate(),
+                    booking.getDepartureDate(),
+                    booking.getStatus().toString(),
+                    tourDTO
+            );
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(bookingDTOs);
+    }
+
+    @PostMapping("/calculate-change-fee/{bookingId}")
+    public ResponseEntity<ChangeTourResponse> calculateChangeFee(
+            @PathVariable Long bookingId,
+            @RequestBody ChangeTourRequest request,
+            Authentication authentication
+    ) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+
+        try {
+            ChangeTourResponse response = tourBookingService.calculateChangeFee(bookingId, request, user);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new ChangeTourResponse() {{
+                setMessage("Lỗi: " + e.getMessage());
+            }});
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ChangeTourResponse() {{
+                setMessage("Lỗi: " + e.getMessage());
+            }});
+        }
+    }
+
+    @PutMapping("/change/{bookingId}")
+    public ResponseEntity<?> changeTour(
+            @PathVariable Long bookingId,
+            @RequestBody ChangeTourRequest request,
+            Authentication authentication
+    ) {
+        if (!(authentication.getPrincipal() instanceof User)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        User user = (User) authentication.getPrincipal();
+        if (user.getCustomer() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
+        }
+
+        try {
+            TourBooking updatedBooking = tourBookingService.changeTour(bookingId, request, user);
+            return ResponseEntity.ok(updatedBooking);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", e.getMessage()));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Collections.singletonMap("error", e.getMessage()));
+        }
+    }
+
 }
