@@ -30,6 +30,22 @@ public class MailService {
     // Thời gian OTP hết hạn (tính bằng giây)
     private static final long OTP_EXPIRY_TIME = TimeUnit.MINUTES.toMillis(5); // 5 phút (đúng định dạng milliseconds)
 
+    public void sendPaymentReminderEmail(String to, String fullName, String tourName, double totalPrice, String deadline) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setTo(to);
+        helper.setSubject("Nhắc nhở thanh toán tour: " + tourName);
+        String htmlContent = "<h3>Xin chào " + fullName + ",</h3>" +
+                "<p>Bạn đã đặt tour <strong>" + tourName + "</strong> với tổng giá: <strong>" + totalPrice + " VND</strong>.</p>" +
+                "<p>Vui lòng thanh toán trước <strong>" + deadline + "</strong> để xác nhận booking.</p>" +
+                "<p>Nếu không thanh toán đúng hạn, booking sẽ tự động bị hủy.</p>" +
+                "<p>Trân trọng,<br>Travel TADA</p>";
+        helper.setText(htmlContent, true);
+
+        mailSender.send(message);
+    }
+
     public boolean sendOtpEmail(String toEmail) {
         try {
             if (otpStore.containsKey(toEmail)) {
@@ -97,6 +113,40 @@ public class MailService {
         helper.setText(emailContent);
         mailSender.send(message);
         System.out.println("Email xác nhận hủy tour đã được gửi tới: " + toEmail);
+    }
+
+    public void sendChangeTourConfirmationEmail(String toEmail, String customerName, String tourName,
+                                                String newDepartureDate, int numberPeople, double newTotalPrice,
+                                                double changeFee, double priceDifference, double refundAmount)
+            throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
+        helper.setSubject("Xác nhận thay đổi lịch tour");
+
+        String emailContent = String.format(
+                "Chào %s,\n\n"
+                        + "Yêu cầu thay đổi lịch tour của bạn đã được xử lý thành công. Dưới đây là thông tin chi tiết:\n\n"
+                        + "Tên tour: %s\n"
+                        + "Ngày khởi hành mới: %s\n"
+                        + "Số người tham gia: %d\n"
+                        + "Tổng giá mới: %,d VNĐ\n"
+                        + "Phí thay đổi: %,d VNĐ\n"
+                        + "%s\n\n"
+                        + "Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi.\n\n"
+                        + "Trân trọng,\n"
+                        + "Đội ngũ hỗ trợ Tour Management.",
+                customerName, tourName, newDepartureDate, numberPeople, (long) newTotalPrice, (long) changeFee,
+                priceDifference > 0 ? String.format("Số tiền cần thanh toán thêm: %,d VNĐ", (long) priceDifference) :
+                        priceDifference < 0 ? String.format("Số tiền hoàn lại: %,d VNĐ", (long) refundAmount) :
+                                "Không có chênh lệch giá."
+        );
+
+        helper.setText(emailContent);
+        mailSender.send(message);
+        System.out.println("Email xác nhận thay đổi lịch tour đã được gửi tới: " + toEmail);
     }
 
     // Sinh OTP ngẫu nhiên

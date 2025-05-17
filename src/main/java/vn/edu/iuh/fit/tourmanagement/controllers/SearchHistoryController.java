@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import vn.edu.iuh.fit.tourmanagement.models.SearchHistory;
+import vn.edu.iuh.fit.tourmanagement.dto.RecommendedTourDTO;
 import vn.edu.iuh.fit.tourmanagement.models.Tour;
 import vn.edu.iuh.fit.tourmanagement.models.User;
 import vn.edu.iuh.fit.tourmanagement.repositories.UserRepository;
@@ -12,7 +12,6 @@ import vn.edu.iuh.fit.tourmanagement.services.HybridRecommendationService;
 import vn.edu.iuh.fit.tourmanagement.services.SearchHistoryService;
 import vn.edu.iuh.fit.tourmanagement.services.TourService;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -39,10 +38,14 @@ public class SearchHistoryController {
     }
 
     @PostMapping("/search")
-    public ResponseEntity<?> searchTours(@RequestParam("query") String query, Authentication authentication) {
+    public ResponseEntity<?> searchTours(@RequestParam("query") String query,
+                                         @RequestParam(defaultValue = "true") boolean random,
+                                         @RequestParam(defaultValue = "false") boolean useTFIDF,
+                                         Authentication authentication) {
         try {
-            List<Tour> searchResults = tourService.searchTours(query);
-            logger.info("Search query: " + query + ", found " + searchResults.size() + " tours");
+            List<Tour> searchResults = useTFIDF ? tourService.searchToursWithTFIDF(query, random)
+                    : tourService.searchTours(query, random);
+            logger.info("Search query: " + query + ", found " + searchResults.size() + " tours (TF-IDF: " + useTFIDF + ", Random: " + random + ")");
 
             if (authentication != null && authentication.isAuthenticated()) {
                 String email = authentication.getName();
@@ -59,25 +62,27 @@ public class SearchHistoryController {
 
             return ResponseEntity.ok(searchResults);
         } catch (Exception e) {
-            logger.severe("Error processing search: " + e.getMessage());
+            String errorEmail = authentication != null && authentication.isAuthenticated() ? authentication.getName() : "unknown";
+            logger.severe("Error processing search for user: " + errorEmail + ", query: " + query + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing search");
         }
     }
 
     @PostMapping("/save")
-    public ResponseEntity<?> saveSearchHistory(@RequestParam("query") String query, Authentication authentication) {
+    public ResponseEntity<?> saveSearchHistory(@RequestParam("query") String query,
+                                               @RequestParam(defaultValue = "true") boolean random,
+                                               @RequestParam(defaultValue = "false") boolean useTFIDF,
+                                               Authentication authentication) {
+        String email = "unknown"; // Giá trị mặc định cho email
         try {
             if (authentication != null && authentication.isAuthenticated()) {
-                String email = authentication.getName();
+                email = authentication.getName();
                 User user = userRepository.findByEmail(email).orElse(null);
                 if (user != null) {
-                    List<Tour> searchResults = tourService.searchTours(query);
-                    if (searchResults.isEmpty()) {
-                        logger.info("No valid search results for query: " + query + ", skipping save search history");
-                        return ResponseEntity.ok("No tours found, search history not saved");
-                    }
+                    List<Tour> searchResults = useTFIDF ? tourService.searchToursWithTFIDF(query, random)
+                            : tourService.searchTours(query, random);
                     searchHistoryService.saveSearch(user, query, searchResults);
-                    logger.info("Saved search history for user: " + email);
+                    logger.info("Saved search history for user: " + email + ", query: " + query);
                     return ResponseEntity.ok("Search history saved");
                 } else {
                     logger.warning("User not found for email: " + email);
@@ -88,8 +93,8 @@ public class SearchHistoryController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
             }
         } catch (Exception e) {
-            logger.severe("Error saving search history: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error saving search history");
+            logger.severe("Error saving search history for user: " + email + ", query: " + query + ": " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error saving search history: " + e.getMessage());
         }
     }
 
@@ -108,11 +113,11 @@ public class SearchHistoryController {
         }
 
         try {
-            List<Tour> recommendedTours = searchHistoryService.getRecommendedToursFromHistory(user);
+            List<RecommendedTourDTO> recommendedTours = searchHistoryService.getRecommendedToursFromHistory(user);
             logger.info("Returning " + recommendedTours.size() + " recommended tours for user ID: " + user.getId());
             return ResponseEntity.ok(recommendedTours);
         } catch (Exception e) {
-            logger.severe("Error retrieving recommended tours: " + e.getMessage());
+            logger.severe("Error retrieving recommended tours for user: " + email + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error retrieving recommended tours");
         }
     }
@@ -137,7 +142,7 @@ public class SearchHistoryController {
             logger.info("Tracked tour click for user ID: " + user.getId() + ", tourId: " + tourId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
-            logger.severe("Error tracking tour click: " + e.getMessage());
+            logger.severe("Error tracking tour click for user: " + email + ": " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error tracking tour click: " + e.getMessage());
         }
     }

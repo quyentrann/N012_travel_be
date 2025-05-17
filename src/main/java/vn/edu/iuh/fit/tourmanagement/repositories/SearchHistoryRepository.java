@@ -15,5 +15,5 @@ public interface SearchHistoryRepository extends JpaRepository<SearchHistory, Lo
     List<SearchHistory> findByUser(User user);
     long countByUser(User user);
     List<SearchHistory> findTopByUserOrderBySearchTimeAsc(User user, Pageable pageable);
-
+    List<SearchHistory> findByUserAndSearchQuery(User user, String searchQuery);
 }

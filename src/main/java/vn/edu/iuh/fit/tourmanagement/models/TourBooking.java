@@ -63,4 +63,7 @@ public class TourBooking {
 
     @Column(name = "number_infants", nullable = false)
     private int numberInfants;
+
+    @Column(name = "reminder_sent") // Thêm trường mới
+    private boolean reminderSent = false;
 }
