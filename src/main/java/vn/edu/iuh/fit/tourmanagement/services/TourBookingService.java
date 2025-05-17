@@ -4,7 +4,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import vn.edu.iuh.fit.tourmanagement.dto.CancelRequest;
 import vn.edu.iuh.fit.tourmanagement.dto.CancelResponse;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingDetailDTO;
 import vn.edu.iuh.fit.tourmanagement.dto.TourBookingRequest;
@@ -17,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class TourBookingService {
@@ -51,8 +51,7 @@ public class TourBookingService {
     }
 
     public TourBooking getTourBookingById(Long id) {
-        return tourBookingRepository.findById(id)
-                .orElseThrow(() -> new NoSuchElementException("Không tìm thấy booking với ID: " + id));
+        return tourBookingRepository.findById(id).orElse(null);
     }
 
     public TourBooking bookTour(TourBookingRequest bookingRequest, Authentication authentication) throws Exception {
@@ -302,6 +301,4 @@ public class TourBookingService {
     public List<BookingHistory> getBookingHistory(Long bookingId) {
         return bookingHistoryRepository.findByTour_TourId(bookingId);
     }
-
-
 }
