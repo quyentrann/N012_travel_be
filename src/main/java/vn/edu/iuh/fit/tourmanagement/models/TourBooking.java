@@ -66,4 +66,7 @@ public class TourBooking {
 
     @Column(name = "reminder_sent") // Thêm trường mới
     private boolean reminderSent = false;
+
+    @Column(name = "is_processed") // Thêm trường để đánh dấu đã xử lý
+    private boolean isProcessed;
 }

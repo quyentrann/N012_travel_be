@@ -13,7 +13,7 @@ public class CorsConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
-                        .allowedOrigins("http://localhost:5173","http://localhost:3000", "https://de-smba.onrender.com") // Địa chỉ của frontend
+                        .allowedOrigins("http://localhost:3000","http://localhost:5173", "http://18.138.107.49", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio", "https://18.138.107.49/api/tours", "https://master.d13wgnx834f8rx.amplifyapp.com/") // Địa chỉ của frontend
                         .allowedMethods("GET", "POST", "PUT","PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);  // Nếu bạn sử dụng cookie/tokens

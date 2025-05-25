@@ -6,7 +6,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.enums.RefundStatus;
 import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
@@ -19,7 +24,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
 
 @RestController
 @RequestMapping("/api/payment")
@@ -39,10 +46,20 @@ public class VnPayCallbackController {
     }
 
     @GetMapping("/vnpay-return")
-    public ResponseEntity<Map<String, String>> vnpayReturn(@RequestParam Map<String, String> params) {
+    public ResponseEntity<Map<String, String>> vnpayReturn(
+            @RequestParam Map<String, String> params,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
         logger.info("VNPAY callback received with params: {}", params);
 
-        // Validate required parameters
+        // Kiểm tra người dùng đã xác thực
+        if (userDetails == null) {
+            logger.error("No authenticated user for VNPAY callback");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Chưa đăng nhập. Vui lòng đăng nhập để tiếp tục."));
+        }
+
+        // Kiểm tra các tham số VNPAY bắt buộc
         if (!params.containsKey("vnp_SecureHash") || !params.containsKey("vnp_TxnRef") ||
                 !params.containsKey("vnp_ResponseCode") || !params.containsKey("vnp_TransactionStatus") ||
                 !params.containsKey("vnp_TransactionNo")) {
@@ -51,7 +68,7 @@ public class VnPayCallbackController {
                     .body(Map.of("message", "Thiếu thông tin thanh toán từ VNPAY"));
         }
 
-        // Validate secure hash
+        // Kiểm tra tính toàn vẹn dữ liệu
         String vnp_SecureHash = params.get("vnp_SecureHash");
         String calculatedHash = calculateSecureHash(params);
         if (!vnp_SecureHash.equalsIgnoreCase(calculatedHash)) {
@@ -61,19 +78,22 @@ public class VnPayCallbackController {
                     .body(Map.of("message", "Xác thực dữ liệu không hợp lệ"));
         }
 
+        // Lấy bookingId từ vnp_TxnRef
         String vnp_ResponseCode = params.get("vnp_ResponseCode");
         String vnp_TransactionStatus = params.get("vnp_TransactionStatus");
         String vnp_TransactionNo = params.get("vnp_TransactionNo");
+        String vnp_TxnRef = params.get("vnp_TxnRef");
         Long bookingId;
         try {
-            bookingId = Long.parseLong(params.get("vnp_TxnRef"));
+            bookingId = Long.parseLong(vnp_TxnRef.split("_")[0]);
         } catch (NumberFormatException e) {
-            logger.error("Invalid vnp_TxnRef format: {}", params.get("vnp_TxnRef"));
+            logger.error("Invalid vnp_TxnRef format: {}", vnp_TxnRef);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", "ID booking không hợp lệ"));
         }
 
         try {
+            // Kiểm tra booking tồn tại
             Optional<TourBooking> optionalBooking = tourBookingService.getBookingById(bookingId);
             if (optionalBooking.isEmpty()) {
                 logger.warn("Booking not found for ID: {}", bookingId);
@@ -82,9 +102,20 @@ public class VnPayCallbackController {
             }
 
             TourBooking booking = optionalBooking.get();
-            logger.info("Booking ID: {}, Current Status: {}, TransactionNo: {}", bookingId, booking.getStatus(), vnp_TransactionNo);
 
-            // Check if transaction was already processed
+            // Kiểm tra quyền sở hữu booking
+            String customerIdentifier = booking.getCustomer().getUser().getUsername();
+            if (!customerIdentifier.equals(userDetails.getUsername())) {
+                logger.warn("User {} does not own booking {} (owned by {})",
+                        userDetails.getUsername(), bookingId, customerIdentifier);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("message", "Bạn không có quyền truy cập booking này"));
+            }
+
+            logger.info("Booking ID: {}, Current Status: {}, TransactionNo: {}",
+                    bookingId, booking.getStatus(), vnp_TransactionNo);
+
+            // Kiểm tra giao dịch đã xử lý chưa
             Optional<BookingHistory> existingHistory = bookingHistoryRepository
                     .findByBooking_BookingIdAndReasonContaining(bookingId, "Transaction: " + vnp_TransactionNo);
             if (existingHistory.isPresent()) {
@@ -92,13 +123,7 @@ public class VnPayCallbackController {
                 return ResponseEntity.ok(Map.of("message", "Giao dịch đã được xử lý thành công!"));
             }
 
-            // Check if booking is already PAID
-            if (booking.getStatus() == BookingStatus.PAID) {
-                logger.info("Booking {} is already PAID, returning success", bookingId);
-                return ResponseEntity.ok(Map.of("message", "Giao dịch đã được xử lý thành công!"));
-            }
-
-            // Process payment if in valid state
+            // Kiểm tra trạng thái booking
             if (booking.getStatus() != BookingStatus.PENDING_PAYMENT &&
                     booking.getStatus() != BookingStatus.CONFIRMED) {
                 logger.warn("Booking {} is not in PENDING_PAYMENT or CONFIRMED status: {}",
@@ -107,11 +132,12 @@ public class VnPayCallbackController {
                         .body(Map.of("message", "Booking không ở trạng thái cho phép thanh toán"));
             }
 
+            // Xử lý giao dịch VNPAY
             if ("00".equals(vnp_ResponseCode) && "00".equals(vnp_TransactionStatus)) {
                 booking.setStatus(BookingStatus.PAID);
                 tourBookingService.updateBooking(booking);
 
-                // Log status change in BookingHistory
+                // Ghi lịch sử giao dịch
                 BookingHistory history = BookingHistory.builder()
                         .booking(booking)
                         .oldStatus(booking.getStatus() == BookingStatus.PENDING_PAYMENT ?
