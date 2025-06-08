@@ -41,7 +41,7 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable())  // Disabling CSRF for stateless API
                 .cors(cors -> cors.configurationSource(request -> {
                     CorsConfiguration config = new CorsConfiguration();
-                    config.setAllowedOrigins(List.of("http://localhost:3000","http://localhost:5173", "https://18.138.107.49/api/tours","http://18.138.107.49", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio", "https://master.d13wgnx834f8rx.amplifyapp.com/"));
+                    config.setAllowedOrigins(List.of("http://localhost:3000","http://localhost:5173", "https://18.138.107.49/api/tours","http://18.138.107.49", "https://app.botpress.cloud", "https://studio.botpress.cloud", "https://botpress.studio", "https://master.d13wgnx834f8rx.amplifyapp.com/", "https://tadatour.io.vn/"));
                     config.setAllowedMethods(List.of("GET", "POST", "PUT","PATCH", "DELETE", "OPTIONS"));
                     config.setAllowedHeaders(List.of("*"));
                     config.setAllowCredentials(true);

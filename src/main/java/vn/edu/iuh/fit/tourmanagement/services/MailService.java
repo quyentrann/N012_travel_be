@@ -87,6 +87,43 @@ public class MailService {
         mailSender.send(message);
     }
 
+    public void sendTourCancellationEmail(String toEmail, String customerName, String tourName, boolean isPaid, double refundAmount) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        helper.setFrom(fromEmail);
+        helper.setTo(toEmail);
+        helper.setSubject("Thông báo hủy tour: " + tourName);
+
+        String emailContent;
+        if (isPaid) {
+            emailContent = String.format(
+                    "Chào %s,\n\n"
+                            + "Chúng tôi rất tiếc phải thông báo rằng tour <strong>%s</strong> đã bị hủy do một số lý do không mong muốn.\n\n"
+                            + "Vì bạn đã thanh toán cho tour này, chúng tôi cam kết hoàn lại <strong>100%% số tiền</strong> (%,d VNĐ) trong thời gian sớm nhất.\n\n"
+                            + "Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi.\n\n"
+                            + "Chúng tôi rất xin lỗi vì sự bất tiện này và mong được phục vụ bạn trong các tour tiếp theo.\n\n"
+                            + "Trân trọng,\n"
+                            + "Đội ngũ hỗ trợ Tour Management.",
+                    customerName, tourName, (long) refundAmount
+            );
+        } else {
+            emailContent = String.format(
+                    "Chào %s,\n\n"
+                            + "Chúng tôi rất tiếc phải thông báo rằng tour <strong>%s</strong> đã bị hủy do một số lý do không mong muốn.\n\n"
+                            + "Booking của bạn sẽ được hủy tự động. Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi.\n\n"
+                            + "Chúng tôi rất xin lỗi vì sự bất tiện này và mong được phục vụ bạn trong các tour tiếp theo.\n\n"
+                            + "Trân trọng,\n"
+                            + "Đội ngũ hỗ trợ Tour Management.",
+                    customerName, tourName
+            );
+        }
+
+        helper.setText(emailContent, true); // Sử dụng HTML để định dạng
+        mailSender.send(message);
+        System.out.println("Email thông báo hủy tour đã được gửi tới: " + toEmail);
+    }
+
     public void sendCancellationConfirmationEmail(String toEmail, String customerName, String tourName,
                                                   String reason, double cancellationFee, double refundAmount)
             throws MessagingException {

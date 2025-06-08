@@ -8,6 +8,7 @@ import vn.edu.iuh.fit.tourmanagement.enums.BookingStatus;
 import vn.edu.iuh.fit.tourmanagement.models.BookingHistory;
 import vn.edu.iuh.fit.tourmanagement.models.TourBooking;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,9 @@ public interface TourBookingRepository extends JpaRepository<TourBooking, Long> 
     List<TourBooking> findByCustomerId(@Param("customerId") Long customerId);
 
     Optional<TourBooking> findById(Long id);
+
+    @Query("SELECT tb FROM TourBooking tb WHERE tb.tour.tourId = :tourId")
+    List<TourBooking> findByTourTourId(@Param("tourId") Long tourId);
 
 //    List<BookingHistory> findByTour_TourId(Long tourId);
 List<TourBooking> findByStatus(BookingStatus status);
@@ -91,4 +95,6 @@ List<TourBooking> findByStatus(BookingStatus status);
             @Param("endDate") LocalDateTime endDate,
             @Param("tourId") Long tourId
     );
+
+    List<TourBooking> findByTour_TourIdAndDepartureDate(Long tourId, LocalDate departureDate);
 }
