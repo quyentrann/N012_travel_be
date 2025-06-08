@@ -49,8 +49,16 @@ public class TourBookingController {
     }
 
     private double calculateCancellationFee(TourBooking booking, LocalDateTime cancelDate, boolean isHoliday) {
-        LocalDateTime tourStartDate = booking.getDepartureDate().atStartOfDay(); // Dùng departureDate
+        LocalDateTime tourStartDate = booking.getDepartureDate().atStartOfDay();
+        LocalDateTime bookingDate = booking.getBookingDate();
         long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(cancelDate, tourStartDate);
+        long hoursSinceBooking = java.time.temporal.ChronoUnit.HOURS.between(bookingDate, cancelDate);
+
+        // Miễn phí hủy trong 24 giờ sau khi đặt nếu ngày khởi hành còn >= 7 ngày
+        if (hoursSinceBooking <= 24 && daysBeforeTour >= 7) {
+            return 0.0; // Hoàn tiền 100%
+        }
+
         double cancellationFee = 0;
         if (isHoliday) {
             if (daysBeforeTour >= 30) {
@@ -127,6 +135,9 @@ public class TourBookingController {
         TourBookingDTO bookingDTO = new TourBookingDTO(
                 tourBooking.getBookingId(),
                 tourBooking.getNumberPeople(),
+                tourBooking.getNumberAdults(),   // Thêm numberAdults
+                tourBooking.getNumberChildren(), // Thêm numberChildren
+                tourBooking.getNumberInfants(),  // Thêm numberInfants
                 tourBooking.getTotalPrice(),
                 tourBooking.getBookingDate(),
                 tourBooking.getDepartureDate(), // Thêm departureDate
@@ -250,9 +261,12 @@ public class TourBookingController {
             return new TourBookingDTO(
                     booking.getBookingId(),
                     booking.getNumberPeople(),
-                    booking.getTotalPrice(), // Sửa: Dùng totalPrice thay vì tour.getPrice()
+                    booking.getNumberAdults(),   // Thêm numberAdults
+                    booking.getNumberChildren(), // Thêm numberChildren
+                    booking.getNumberInfants(),  // Thêm numberInfants
+                    booking.getTotalPrice(),
                     booking.getBookingDate(),
-                    booking.getDepartureDate(), // Thêm departureDate
+                    booking.getDepartureDate(),
                     booking.getStatus().toString(),
                     tourDTO
             );
@@ -344,6 +358,9 @@ public class TourBookingController {
             return new TourBookingDTO(
                     booking.getBookingId(),
                     booking.getNumberPeople(),
+                    booking.getNumberAdults(),   // Thêm numberAdults
+                    booking.getNumberChildren(), // Thêm numberChildren
+                    booking.getNumberInfants(),  // Thêm numberInfants
                     booking.getTotalPrice(),
                     booking.getBookingDate(),
                     booking.getDepartureDate(),
@@ -371,6 +388,13 @@ public class TourBookingController {
 
         try {
             ChangeTourResponse response = tourBookingService.calculateChangeFee(bookingId, request, user);
+            long hoursSinceBooking = java.time.temporal.ChronoUnit.HOURS.between(
+                    tourBookingRepository.findById(bookingId).get().getBookingDate(),
+                    LocalDateTime.now()
+            );
+            if (hoursSinceBooking <= 24 && response.getChangeFee() == 0) {
+                response.setMessage("Miễn phí đổi tour trong 24 giờ sau khi đặt!");
+            }
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new ChangeTourResponse() {{

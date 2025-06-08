@@ -47,7 +47,7 @@ public class AuthJWTService {
     }
 
     public AuthResponse register(AuthRequest request) {
-        // Kiểm tra dữ liệu đầu vào
+        // Kiểm tra dữ liệu bắt buộc
         if (request.getEmail() == null || request.getEmail().trim().isEmpty() || !request.getEmail().matches("^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$")) {
             return AuthResponse.builder().message("Email không hợp lệ hoặc để trống.").build();
         }
@@ -56,12 +56,6 @@ public class AuthJWTService {
         }
         if (request.getFullName() == null || request.getFullName().trim().isEmpty()) {
             return AuthResponse.builder().message("Họ tên không được để trống.").build();
-        }
-        if (request.getPhoneNumber() == null || !request.getPhoneNumber().matches("^\\d{10}$")) {
-            return AuthResponse.builder().message("Số điện thoại phải có 10 chữ số.").build();
-        }
-        if (request.getDob() != null && request.getDob().isAfter(LocalDate.now())) {
-            return AuthResponse.builder().message("Ngày sinh phải là ngày trong quá khứ.").build();
         }
 
         // Kiểm tra email đã tồn tại
@@ -83,6 +77,16 @@ public class AuthJWTService {
                     .build();
         }
 
+        // Kiểm tra dob nếu được cung cấp
+        if (request.getDob() != null && request.getDob().isAfter(LocalDate.now())) {
+            return AuthResponse.builder().message("Ngày sinh phải là ngày trong quá khứ.").build();
+        }
+
+        // Kiểm tra phoneNumber nếu được cung cấp
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isEmpty() && !request.getPhoneNumber().matches("^\\d{10}$")) {
+            return AuthResponse.builder().message("Số điện thoại phải có 10 chữ số.").build();
+        }
+
         // Tạo User mới
         User newUser = User.builder()
                 .email(request.getEmail())
@@ -92,15 +96,26 @@ public class AuthJWTService {
                 .build();
         newUser = userRepository.save(newUser);
 
-        // Tạo Customer
-        Customer newCustomer = Customer.builder()
+        // Tạo Customer với các trường không bắt buộc
+        Customer.CustomerBuilder customerBuilder = Customer.builder()
                 .user(newUser)
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .dob(request.getDob())
-                .address(request.getAddress())
-                .gender(request.isGender())
-                .build();
+                .fullName(request.getFullName());
+
+        // Chỉ thêm các trường nếu chúng được cung cấp
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isEmpty()) {
+            customerBuilder.phoneNumber(request.getPhoneNumber());
+        }
+        if (request.getDob() != null) {
+            customerBuilder.dob(request.getDob());
+        }
+        if (request.getAddress() != null && !request.getAddress().isEmpty()) {
+            customerBuilder.address(request.getAddress());
+        }
+        if (request.getGender() != null) { // Sử dụng Boolean, kiểm tra null
+            customerBuilder.gender(request.getGender());
+        }
+
+        Customer newCustomer = customerBuilder.build();
         customerRepository.save(newCustomer);
 
         try {

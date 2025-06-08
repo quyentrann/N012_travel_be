@@ -26,25 +26,25 @@ public class VnPayService {
     private String returnUrl;
 
     public String createPayment(Long bookingId, Long totalPrice, String ipAddress) {
+        // Generate unique vnp_TxnRef
+        String vnp_TxnRef = bookingId + "_" + System.currentTimeMillis();
         Map<String, String> vnpParams = new HashMap<>();
         vnpParams.put("vnp_Version", "2.1.0");
         vnpParams.put("vnp_Command", "pay");
         vnpParams.put("vnp_TmnCode", tmnCode);
-        vnpParams.put("vnp_Amount", String.valueOf(totalPrice * 100)); // VNPAY requires amount * 100
+        vnpParams.put("vnp_Amount", String.valueOf(totalPrice * 100));
         vnpParams.put("vnp_CurrCode", "VND");
-        vnpParams.put("vnp_TxnRef", String.valueOf(bookingId));
+        vnpParams.put("vnp_TxnRef", vnp_TxnRef);
         vnpParams.put("vnp_OrderInfo", "Thanh toan don hang " + bookingId);
         vnpParams.put("vnp_OrderType", "other");
         vnpParams.put("vnp_Locale", "vn");
-        vnpParams.put("vnp_ReturnUrl", returnUrl); // Remove bookingId parameter
+        vnpParams.put("vnp_ReturnUrl", returnUrl);
         vnpParams.put("vnp_IpAddr", ipAddress);
         vnpParams.put("vnp_CreateDate", new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()));
 
-        // Sort parameters alphabetically
         List<String> fieldNames = new ArrayList<>(vnpParams.keySet());
         Collections.sort(fieldNames);
 
-        // Build query string
         StringBuilder queryBuilder = new StringBuilder();
         for (String fieldName : fieldNames) {
             String value = URLEncoder.encode(vnpParams.get(fieldName), StandardCharsets.UTF_8);
@@ -52,7 +52,6 @@ public class VnPayService {
         }
         queryBuilder.deleteCharAt(queryBuilder.length() - 1);
 
-        // Generate secure hash
         String query = queryBuilder.toString();
         String secureHash = hmacSHA512(secretKey, query);
         query += "&vnp_SecureHash=" + secureHash;

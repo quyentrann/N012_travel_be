@@ -85,8 +85,12 @@ public class TourController {
                                             schedule.getDayNumber(),
                                             schedule.getLocation(),
                                             schedule.getStransport(),
-                                            schedule.getActivities()
+                                            schedule.getActivities(),
+                                            schedule.getMeal(),
+                                            schedule.getArrivalTime(),
+                                            schedule.getDepartureTime()
                                     ))
+
                                     .collect(Collectors.toList()),
                             tour.getReviews().stream()
                                     .map(review -> new ReviewDTO(
@@ -157,8 +161,12 @@ public class TourController {
                                 schedule.getDayNumber(),
                                 schedule.getLocation(),
                                 schedule.getStransport(),
-                                schedule.getActivities()
+                                schedule.getActivities(),
+                                schedule.getMeal(),
+                                schedule.getArrivalTime(),
+                                schedule.getDepartureTime()
                         ))
+
                         .collect(Collectors.toList()),
                 tour.getReviews().stream()
                         .map(review -> new ReviewDTO(
@@ -226,8 +234,12 @@ public class TourController {
                                             schedule.getDayNumber(),
                                             schedule.getLocation(),
                                             schedule.getStransport(),
-                                            schedule.getActivities()
+                                            schedule.getActivities(),
+                                            schedule.getMeal(),
+                                            schedule.getArrivalTime(),
+                                            schedule.getDepartureTime()
                                     ))
+
                                     .collect(Collectors.toList()),
                             tour.getReviews().stream()
                                     .map(review -> new ReviewDTO(
@@ -399,8 +411,12 @@ public class TourController {
                                             schedule.getDayNumber(),
                                             schedule.getLocation(),
                                             schedule.getStransport(),
-                                            schedule.getActivities()
+                                            schedule.getActivities(),
+                                            schedule.getMeal(),
+                                            schedule.getArrivalTime(),
+                                            schedule.getDepartureTime()
                                     ))
+
                                     .collect(Collectors.toList()),
                             tour.getReviews().stream()
                                     .map(review -> new ReviewDTO(
@@ -472,8 +488,12 @@ public class TourController {
                                             schedule.getDayNumber(),
                                             schedule.getLocation(),
                                             schedule.getStransport(),
-                                            schedule.getActivities()
+                                            schedule.getActivities(),
+                                            schedule.getMeal(),
+                                            schedule.getArrivalTime(),
+                                            schedule.getDepartureTime()
                                     ))
+
                                     .collect(Collectors.toList()),
                             tour.getReviews().stream()
                                     .map(review -> new ReviewDTO(
@@ -587,8 +607,12 @@ public class TourController {
                                             schedule.getDayNumber(),
                                             schedule.getLocation(),
                                             schedule.getStransport(),
-                                            schedule.getActivities()
+                                            schedule.getActivities(),
+                                            schedule.getMeal(),
+                                            schedule.getArrivalTime(),
+                                            schedule.getDepartureTime()
                                     ))
+
                                     .collect(Collectors.toList()),
                             tour.getReviews().stream()
                                     .map(review -> new ReviewDTO(
@@ -648,8 +672,12 @@ public class TourController {
                                 schedule.getDayNumber(),
                                 schedule.getLocation(),
                                 schedule.getStransport(),
-                                schedule.getActivities()
+                                schedule.getActivities(),
+                                schedule.getMeal(),
+                                schedule.getArrivalTime(),
+                                schedule.getDepartureTime()
                         ))
+
                         .collect(Collectors.toList()),
                 tour.getReviews().stream()
                         .map(review -> new ReviewDTO(

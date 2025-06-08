@@ -435,8 +435,8 @@ public class TourBookingService {
 
         // Calculate prices
         double adultPrice = tour.getPrice();
-        double childPrice = adultPrice * 0.85; // 85% for children
-        double infantPrice = adultPrice * 0.30; // 30% for infants
+        double childPrice = adultPrice * 0.85;
+        double infantPrice = adultPrice * 0.30;
         double holidayMultiplier = request.isHoliday() ? 1.2 : 1.0;
 
         double newTotalPrice = (adultPrice * request.getNumberAdults() +
@@ -448,11 +448,22 @@ public class TourBookingService {
             newTotalPrice *= 0.9;
         }
 
-        double priceDifference = newTotalPrice - booking.getTotalPrice();
         double changeFee = calculateChangeFee(booking, request);
+        double priceDifference = newTotalPrice - booking.getTotalPrice();
         double refundAmount = priceDifference < 0 ? Math.abs(priceDifference) - changeFee : 0;
         if (refundAmount < 0) {
             refundAmount = 0;
+        }
+
+        // Determine additional payment and status
+        double additionalPayment;
+        BookingStatus newStatus;
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            additionalPayment = newTotalPrice + changeFee;
+            newStatus = additionalPayment > 0 ? BookingStatus.PENDING_PAYMENT : BookingStatus.CONFIRMED;
+        } else { // PAID
+            additionalPayment = priceDifference > 0 ? priceDifference + changeFee : 0;
+            newStatus = additionalPayment > 0 ? BookingStatus.PENDING_PAYMENT : BookingStatus.PAID;
         }
 
         // Update tour slots
@@ -473,30 +484,30 @@ public class TourBookingService {
         booking.setNumberChildren(request.getNumberChildren());
         booking.setNumberInfants(request.getNumberInfants());
         booking.setTotalPrice(newTotalPrice);
-        booking.setStatus(priceDifference > 0 ? BookingStatus.PENDING_PAYMENT : BookingStatus.PAID);
+        booking.setStatus(newStatus);
 
         // Create BookingHistory
         BookingHistory history = BookingHistory.builder()
                 .booking(booking)
                 .oldStatus(oldStatus)
-                .newStatus(booking.getStatus())
+                .newStatus(newStatus)
                 .changeDate(LocalDateTime.now())
                 .reason("Đổi lịch tour sang ngày " + newDepartureDate + " với " + numberPeople + " người")
                 .cancellationFee(changeFee)
                 .refundAmount(refundAmount)
-                .additionalPayment(priceDifference > 0 ? priceDifference : 0)
+                .additionalPayment(additionalPayment)
                 .refundStatus(refundAmount > 0 ? RefundStatus.PENDING : RefundStatus.NONE)
                 .tour(tour)
                 .isHoliday(request.isHoliday())
                 .cancelDate(null)
                 .build();
 
-        // Save history and booking in a single transaction
+        // Save history and booking
         try {
             bookingHistoryRepository.save(history);
             tourBookingRepository.save(booking);
             logger.info("Successfully saved BookingHistory and TourBooking: bookingId={}, newStatus={}, additionalPayment={}",
-                    bookingId, booking.getStatus(), priceDifference > 0 ? priceDifference : 0);
+                    bookingId, newStatus, additionalPayment);
         } catch (DataAccessException e) {
             logger.error("Failed to save BookingHistory or TourBooking for bookingId: {}, error: {}", bookingId, e.getMessage());
             throw new RuntimeException("Failed to save booking changes", e);
@@ -512,7 +523,7 @@ public class TourBookingService {
                     numberPeople,
                     newTotalPrice,
                     changeFee,
-                    priceDifference,
+                    additionalPayment,
                     refundAmount
             );
             logger.info("Change tour email sent to: {}", user.getEmail());
@@ -526,32 +537,34 @@ public class TourBookingService {
     private double calculateChangeFee(TourBooking booking, ChangeTourRequest request) {
         LocalDateTime changeDate = request.getChangeDate() != null ? request.getChangeDate() : LocalDateTime.now();
         LocalDateTime departureDate = booking.getDepartureDate().atStartOfDay();
+        LocalDateTime bookingDate = booking.getBookingDate();
         long daysBeforeTour = java.time.temporal.ChronoUnit.DAYS.between(changeDate, departureDate);
+        long hoursSinceBooking = java.time.temporal.ChronoUnit.HOURS.between(bookingDate, changeDate);
+
+        // Miễn phí đổi trong 24 giờ sau khi đặt tour nếu ngày khởi hành còn xa
+        if (hoursSinceBooking <= 24 && daysBeforeTour >= 7) {
+            return 0.0; // Miễn phí đổi tour
+        }
+
+        // Không cho đổi tour nếu < 7 ngày trước khởi hành
+        if (daysBeforeTour < 7) {
+            throw new IllegalArgumentException("Không thể đổi tour khi còn dưới 7 ngày trước ngày khởi hành.");
+        }
 
         double changeFee = 0;
         if (request.isHoliday()) {
             if (daysBeforeTour >= 30) {
-                changeFee = 0.2 * booking.getTotalPrice();
+                changeFee = 0.15 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 15) {
-                changeFee = 0.4 * booking.getTotalPrice();
+                changeFee = 0.2 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 7) {
-                changeFee = 0.6 * booking.getTotalPrice();
-            } else if (daysBeforeTour >= 3) {
-                changeFee = 0.8 * booking.getTotalPrice();
-            } else {
-                changeFee = booking.getTotalPrice();
+                changeFee = 0.3 * booking.getTotalPrice();
             }
         } else {
             if (daysBeforeTour >= 14) {
                 changeFee = 0.1 * booking.getTotalPrice();
             } else if (daysBeforeTour >= 7) {
-                changeFee = 0.3 * booking.getTotalPrice();
-            } else if (daysBeforeTour >= 4) {
-                changeFee = 0.5 * booking.getTotalPrice();
-            } else if (daysBeforeTour >= 1) {
-                changeFee = 0.7 * booking.getTotalPrice();
-            } else {
-                changeFee = booking.getTotalPrice();
+                changeFee = 0.2 * booking.getTotalPrice();
             }
         }
         return changeFee;

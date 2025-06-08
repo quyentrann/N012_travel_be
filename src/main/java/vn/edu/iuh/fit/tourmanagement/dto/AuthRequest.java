@@ -18,5 +18,5 @@ public class AuthRequest {
     private String phoneNumber;   // Số điện thoại
     private LocalDate dob;        // Ngày sinh
     private String address;       // Địa chỉ
-    private boolean gender;
+    private Boolean gender;
 }

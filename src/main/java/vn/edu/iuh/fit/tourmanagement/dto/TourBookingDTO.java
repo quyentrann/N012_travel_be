@@ -12,10 +12,13 @@ import java.time.LocalDateTime;
 @Builder
 public class TourBookingDTO {
     private Long bookingId;
-    private Integer numberPeople;
-    private Double totalPrice;
+    private int numberPeople;
+    private int numberAdults;  // Thêm trường
+    private int numberChildren;  // Thêm trường
+    private int numberInfants;  // Thêm trường
+    private double totalPrice;
     private LocalDateTime bookingDate;
     private LocalDate departureDate;
     private String status;
-    private TourDTO tour; // Thêm TourDTO
+    private TourDTO tour;
 }
